@@ -99,10 +99,12 @@ feedback() {
         display.AddEdit("wp")
         display.AddUpDown("Range1-5 vscore", SubStr(cur.unmod, 1, 1))
         display.AddEdit("wp r4 VScroll vnotes", SubStr(cur.unmod, 3))
-        display.AddText("wp", "Secondary UNMOD:")
-        display.AddEdit("wp Disabled")
-        display.AddUpDown("Range1-5 Disabled", SubStr(cur.unmod_feed, 1, 1))
-        display.AddEdit("wp r4 VScroll Disabled", SubStr(cur.unmod_feed, 3))
+        if (single) {
+            display.AddText("wp", "Secondary UNMOD:")
+            display.AddEdit("wp Disabled")
+            display.AddUpDown("Range1-5 Disabled", SubStr(cur.unmod_feed, 1, 1))
+            display.AddEdit("wp r4 VScroll Disabled", SubStr(cur.unmod_feed, 3))
+        }
         if (cur.mod) {
             display.AddText("wp", "MOD feedback:")
             for i, speech in cur.mod {
@@ -112,7 +114,7 @@ feedback() {
                 display.AddEdit("wp r" Min(EditGetLineCount(test.AddEdit("wp", SubStr(speech, 3)).Hwnd, test.Hwnd), 4) " vnotes" i, SubStr(speech, 3))
             }
         }
-        if (cur.mod_feed) {
+        if (single && cur.mod_feed) {
             display.AddText("wp", "Secondary MOD feedback:")
             for i, speech in cur.mod_feed {
                 display.AddText("wp", "Speech number " i ":")
