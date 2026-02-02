@@ -2,7 +2,7 @@
 #Include JSON.ahk
 #Include class.ahk
 #SingleInstance Force
-single := MsgBox("Are you running on a single computer?",,0x4) == "Yes"
+single := MsgBox("Do you want internet communication?",,0x4) == "No"
 if (!single) {
     if (MsgBox("Your IP address is " . SysGetIPAddresses()[1] " copy to clipboard? ",,0x4)=="Yes") {
         A_Clipboard := SysGetIPAddresses()[1]
@@ -28,7 +28,7 @@ list := false
 countries := {}
 fileFinder()
 
-chair := Munager("Chair screen",,40,,(*) => ExitApp())
+chair := Munager("Chair screen",,30,,(*) => ExitApp())
 chair.AddButton("Center w500", "Roll call", (*) => call())
 chair.AddButton("Center wp", "Motions", (*) => motion())
 chair.AddButton("Center wp", "Roll call vote", (*) => vote())
@@ -632,8 +632,26 @@ motion() {
                 i++
             }
             out := show.motions.RemoveAt(i)
-
-            sort(out.proposer, out.text, ctrl.Value, out.time, SubStr(ctrl.name, 5))
+                        time := InputBox("What is the new time?")
+            if (time.Result == "Ok") {
+                formatted := formatSecond(time.Value)
+                if (InStr(formatted, ":")) {
+                    split := StrSplit(formatted, ":")
+                    time := split[1]*60 + split[2]
+                } else {
+                    time := Integer(formatted)
+                }
+            } else {
+                time := out.time
+            }
+            text := out.text
+            if (InStr(out.text, "/")) {
+                single := InputBox("What is the new time?")
+                if (single.Result == "Ok") {
+                    text := formatSecond(single.Value) "/" StrSplit(out.text, "/",,2)[2]
+                }
+            }
+            sort(out.proposer, text, out.prio, time, SubStr(ctrl.name, 5))
         }
 
         sort(proposer, text, priority, time, count) {
@@ -683,7 +701,6 @@ motion() {
             show.Destroy()
             control.Destroy()
 
-            MsgBox(obj.time)
             if (InStr(obj.text, "/")) {
                 adjustMulti(guiObjs) {
                     for guiObj in guiObjs {

@@ -3,7 +3,7 @@
 #Include class.ahk
 #SingleInstance Force
 
-ip := InputBox("What is the server's IP address? Click cancel to run with a single computer.")
+ip := InputBox("What is the server's IP address? Click cancel to run without internet communication.")
 if (ip.Result == "OK") {
     ask := 1
     ip := ip.Value
