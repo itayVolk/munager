@@ -645,7 +645,7 @@ motion() {
                 time := out.time
             }
             split := StrSplit(out.text, " ",,2)
-            text := time " " split[2]
+            text := formatSecond(time) " " split[2]
             if (InStr(out.text, "/")) {
                 single := InputBox("What is the new speaking time?")
                 if (single.Result == "OK") {
@@ -654,6 +654,7 @@ motion() {
                     text := StrSplit(split[1], "/",,1)[1] "/" text
                 }
             }
+            ctrl.Gui["text" SubStr(ctrl.name, 5)].Text := text
             sort(out.proposer, text, out.priority, time, SubStr(ctrl.name, 5))
         }
 
