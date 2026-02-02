@@ -633,7 +633,6 @@ motion() {
             }
             out := show.motions.RemoveAt(i)
             time := InputBox("What is the new time?")
-            MsgBox(time.Result)
             if (time.Result == "OK") {
                 formatted := formatSecond(time.Value)
                 if (InStr(formatted, ":")) {
@@ -645,15 +644,16 @@ motion() {
             } else {
                 time := out.time
             }
-            MsgBox(time)
-            text := out.text
+            split := StrSplit(out.text, " ",,2)
+            text := time " " split[2]
             if (InStr(out.text, "/")) {
                 single := InputBox("What is the new speaking time?")
                 if (single.Result == "OK") {
-                    text := formatSecond(single.Value) "/" StrSplit(out.text, "/",,2)[2]
+                    text := formatSecond(single.Value) "/" text
+                } else {
+                    text := StrSplit(split[1], "/",,1)[1] "/" text
                 }
             }
-            MsgBox(text)
             sort(out.proposer, text, out.priority, time, SubStr(ctrl.name, 5))
         }
 
