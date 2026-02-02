@@ -646,12 +646,12 @@ motion() {
             }
             text := out.text
             if (InStr(out.text, "/")) {
-                single := InputBox("What is the new time?")
+                single := InputBox("What is the speaking new time?")
                 if (single.Result == "Ok") {
                     text := formatSecond(single.Value) "/" StrSplit(out.text, "/",,2)[2]
                 }
             }
-            sort(out.proposer, text, out.prio, time, SubStr(ctrl.name, 5))
+            sort(out.proposer, text, out.priority, time, SubStr(ctrl.name, 5))
         }
 
         sort(proposer, text, priority, time, count) {
