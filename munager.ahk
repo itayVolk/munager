@@ -34,12 +34,14 @@ chair.AddButton("Center wp", "Motions", (*) => motion())
 chair.AddButton("Center wp", "Roll call vote", (*) => vote())
 chair.AddButton("Center wp", "Show feedback", (*) => feedback())
 chair.AddButton("Center wp", "Awards", (*) => awards())
-chair.AddButton("Center wp", "Save", (*) => save())
-chair.AddButton("Center wp", "Download secondary", (*) => RunWait("git pull", settingsRead("file") "\.."))
+if (single) {
+    chair.AddButton("Center wp", "Save", (*) => save())
+    chair.AddButton("Center wp", "Sync secondary", (*) => RunWait("git pull", settingsRead("file") "\.."))
+}
 chair.AddButton("Center wp", "Settings", (*) => settings())
 chair.Show()
 
-OnExit((*) => save())
+OnExit((*) => save(single))
 
 feedback() {
     global chair

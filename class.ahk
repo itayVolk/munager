@@ -271,7 +271,7 @@ fileFinder() {
                 continue
             }
             split := StrSplit(country, ",")
-            while (split.Length < 3) {
+            while (split.Length < 2) {
                 split.Push("")
             }
             countries[Trim(split[1], " `t`n`r")].unmod_feed := Trim(StrReplace(StrReplace(split[2], "``n", "`r`n"), "``c", ","), " `t`n`r")
@@ -308,7 +308,7 @@ settingsRead(key) {
     }
 }
 
-save(main := true) {
+save(sync := true, main := true) {
     if (main) {
         FileDelete(settingsRead("file"))
         fp := FileOpen(settingsRead("file"), "w")
@@ -336,7 +336,9 @@ save(main := true) {
     }
     fp.Write(Trim(text, " `t`n`r"))
     fp.Close()
-    RunWait("git add .", settingsRead("file") "\..")
-    RunWait('git commit -m "saved data"', settingsRead("file") "\..")
-    RunWait("git push", settingsRead("file") "\..")
+    if (sync) {
+        RunWait("git add .", settingsRead("file") "\..")
+        RunWait('git commit -m "saved data"', settingsRead("file") "\..")
+        RunWait("git push", settingsRead("file") "\..")
+    }
 }

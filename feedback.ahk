@@ -55,7 +55,7 @@ if (ip.Result == "OK") {
     ip := ""
     fileFinder()
     primary()
-    OnExit((*) => save(false))
+    OnExit((*) => save(, false))
 }
 
 write(country, unmod, mod) {
@@ -188,7 +188,7 @@ primary() {
         select.AddText("wp", "Incoming speeches ")
         select.AddListBox("r3 wp Choose" (ask+2), ["are ignored", "take control", "prompt you"]).OnEvent("Change", (ctrl, *) => ask := ctrl.Value-2)
     } else {
-        select.AddButton("wp", "Save feedback", (*) => save(false))
+        select.AddButton("wp", "Save feedback", (*) => save(,false))
         select.AddButton("wp", "Download from server", (*) => RunWait("git pull", settingsRead("file") "\.."))
     }
     select.show()
