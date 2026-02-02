@@ -632,7 +632,8 @@ motion() {
                 i++
             }
             out := show.motions.RemoveAt(i)
-                        time := InputBox("What is the new time?")
+            time := InputBox("What is the new time?")
+            MsgBox(time.Result)
             if (time.Result == "Ok") {
                 formatted := formatSecond(time.Value)
                 if (InStr(formatted, ":")) {
@@ -644,13 +645,15 @@ motion() {
             } else {
                 time := out.time
             }
+            MsgBox(time)
             text := out.text
             if (InStr(out.text, "/")) {
-                single := InputBox("What is the speaking new time?")
+                single := InputBox("What is the new speaking time?")
                 if (single.Result == "Ok") {
                     text := formatSecond(single.Value) "/" StrSplit(out.text, "/",,2)[2]
                 }
             }
+            MsgBox(text)
             sort(out.proposer, text, out.priority, time, SubStr(ctrl.name, 5))
         }
 
@@ -916,7 +919,7 @@ motion() {
         control.AddText("yp w417 vtext" control.count, text)
         control.AddEdit("yp w97 vedit" control.count)
         control.AddUpDown("wp vprio" control.count, control["type"].Value, change)
-        control.AddButton("yp wp h55 vtime" control.count, Chr(0x2713), amend)
+        control.AddButton("yp wp h55 vtime" control.count, Chr(0x23F1), amend)
         control.AddButton("yp wp h55 vpass" control.count, Chr(0x2713), succeed)
         control.AddButton("yp wp h55 vfail" control.count, Chr(0x2717), fail)
         control.show()
