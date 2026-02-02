@@ -3,7 +3,7 @@
 #Include class.ahk
 #SingleInstance Force
 
-ip := InputBox("What is the server's IP address? Click cancel to run without internet communication.")
+ip := InputBox("What is the server's IP address? Click cancel to run without direct internet communication and attempt to use git.")
 if (ip.Result == "OK") {
     ask := 1
     ip := ip.Value
