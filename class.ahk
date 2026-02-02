@@ -251,7 +251,7 @@ fileFinder() {
         while (split.Length < 4) {
             split.Push("")
         }
-        countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"), unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: []}
+        countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"), unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: "", mod_feed: []}
         if (split.Length >= 5) {
             i := 5
             while (i <= split.Length) {
@@ -260,6 +260,30 @@ fileFinder() {
                 }
                 countries[Trim(split[1], " `t`n`r")].mod.Push(Trim(StrReplace(StrReplace(split[i], "``n", "`r`n"), "``c", ","), " `t`n`r"))
                 i++
+            }
+        }
+    }
+
+    if (FileExist(settingsRead("file") "\..\secondary.csv")) {
+        temp := StrSplit(FileRead(settingsRead("file") "\..\secondary.csv"),"`n")
+        for country in temp {
+            if (!country) {
+                continue
+            }
+            split := StrSplit(country, ",")
+            while (split.Length < 3) {
+                split.Push("")
+            }
+            countries[Trim(split[1], " `t`n`r")].unmod_feed := Trim(StrReplace(StrReplace(split[2], "``n", "`r`n"), "``c", ","), " `t`n`r")
+            if (split.Length >= 3) {
+                i := 3
+                while (i <= split.Length) {
+                    if (!Trim(split[i], " `t`n`r")) {
+                        break
+                    }
+                    countries[Trim(split[1], " `t`n`r")].mod_feed.Push(Trim(StrReplace(StrReplace(split[i], "``n", "`r`n"), "``c", ","), " `t`n`r"))
+                    i++
+                }
             }
         }
     }
@@ -284,17 +308,35 @@ settingsRead(key) {
     }
 }
 
-save() {
-    FileDelete(settingsRead("file"))
-    fp := FileOpen(settingsRead("file"), "w")
-    text := ""
-    for country, val in countries {
-        text .= country "," val.type "," val.stat "," StrReplace(StrReplace(val.unmod, "`r`n", "``n"), ",", "``c")
-        for speech in val.mod {
-            text .= "," StrReplace(StrReplace(speech, "`r`n", "``n"), ",", "``c")
+save(main := true) {
+    if (main) {
+        FileDelete(settingsRead("file"))
+        fp := FileOpen(settingsRead("file"), "w")
+        text := ""
+        for country, val in countries {
+            text .= country "," val.type "," val.stat "," StrReplace(StrReplace(val.unmod, "`r`n", "``n"), ",", "``c")
+            for speech in val.mod {
+                text .= "," StrReplace(StrReplace(speech, "`r`n", "``n"), ",", "``c")
+            }
+            text .= "`n"
         }
-        text .= "`n"
+    } else {
+        secondary := settingsRead("file") "\..\secondary.csv"
+        if (FileExist(secondary))
+            FileDelete(secondary)
+        fp := FileOpen(secondary, "w")
+        text := ""
+        for country, val in countries {
+            text .= country "," StrReplace(StrReplace(val.unmod_feed, "`r`n", "``n"), ",", "``c")
+            for speech in val.mod_feed {
+                text .= "," StrReplace(StrReplace(speech, "`r`n", "``n"), ",", "``c")
+            }
+            text .= "`n"
+        }
     }
     fp.Write(Trim(text, " `t`n`r"))
     fp.Close()
+    RunWait("git add .", settingsRead("file") "\..")
+    RunWait('git commit -m "saved data"', settingsRead("file") "\..")
+    ; RunWait("git push", settingsRead("file") "\..")
 }

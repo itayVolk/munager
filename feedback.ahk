@@ -55,7 +55,7 @@ if (ip.Result == "OK") {
     ip := ""
     fileFinder()
     primary()
-    OnExit((*) => save())
+    OnExit((*) => save(false))
 }
 
 write(country, unmod, mod) {
@@ -155,7 +155,7 @@ primary() {
     global ask, select := Munager("Feedback selector",,30,1,(*) => ExitApp())
     arr := []
     for country, val in countries {
-        if (val.stat || !ip) {
+        if (val.stat) {
             arr.Push(country)
         }
     }
@@ -163,6 +163,8 @@ primary() {
     select.AddButton("wp", "Speech", (*) => mod(select["del"].Text))
     select.AddButton("wp", "Show feedback", (*) => show())
     select.AddButton("wp", "Awards", (*) => awards())
+    select.AddButton("wp", "Save feedback", (*) => save(false))
+    select.AddButton("wp", "Download from server", (*) => RunWait("git pull", settingsRead("file") "\.."))
     if (ip) {
         select.AddText("wp", "Incoming speeches ")
         select.AddListBox("r3 wp Choose" (ask+2), ["are ignored", "take control", "prompt you"]).OnEvent("Change", (ctrl, *) => ask := ctrl.Value-2)
