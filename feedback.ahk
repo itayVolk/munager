@@ -68,7 +68,7 @@ mod(country, ask := 0) {
     update() {
         display.Hide()
         if (Trim(display["notes"].Text, " `t`n`r")) {
-            cur.mod.Push(display["score"].Value ":" Trim(display["notes"].text, " `t`n`r"))
+            cur.%"mod" (ip?"":"_feed")%.Push(display["score"].Value ":" Trim(display["notes"].text, " `t`n`r"))
         }
         write(country, cur.unmod, cur.mod)
         select.show()
@@ -92,18 +92,18 @@ primary() {
         update() {
             display.Hide()
             if (Trim(display["notes"].Text, " `t`n`r")) {
-                cur.unmod := display["score"].Value ":" Trim(display["notes"].text, " `t`n`r")
+                cur.%"unmod" (ip?"":"_feed")% := display["score"].Value ":" Trim(display["notes"].text, " `t`n`r")
             } else {
-                cur.unmod := ""
+                cur.%"unmod" (ip?"":"_feed")% := ""
             }
 
             i := 1
             j := 1
-            while (i <= cur.mod.Length) {
+            while (i <= cur.%"mod" (ip?"":"_feed")%.Length) {
                 if (Trim(display["notes" j].Text, " `t`n`r")) {
-                    cur.mod[i++] := display["score" j].Value ":" Trim(display["notes" j].text, " `t`n`r")
+                    cur.%"mod" (ip?"":"_feed")%[i++] := display["score" j].Value ":" Trim(display["notes" j].text, " `t`n`r")
                 } else {
-                    cur.mod.RemoveAt(i)
+                    cur.%"mod" (ip?"":"_feed")%.RemoveAt(i)
                 }
                 j++
             }
@@ -118,15 +118,30 @@ primary() {
         display.norm()
         display.AddText("wp", "UNMOD:")
         display.AddEdit("wp")
-        display.AddUpDown("Range1-5 vscore", SubStr(cur.unmod, 1, 1))
-        display.AddEdit("wp r4 VScroll vnotes", SubStr(cur.unmod, 3))
-        if (cur.mod) {
+        display.AddUpDown("Range1-5 vscore", SubStr(cur.%"unmod" (ip?"":"_feed")%, 1, 1))
+        display.AddEdit("wp r4 VScroll vnotes", SubStr(cur.%"unmod" (ip?"":"_feed")%, 3))
+        if (!ip) {
+            display.AddText("wp", "Server UNMOD:")
+            display.AddEdit("wp Disabled")
+            display.AddUpDown("Range1-5 Disabled", SubStr(cur.unmod, 1, 1))
+            display.AddEdit("wp r4 VScroll Disabled", SubStr(cur.unmod, 3))
+        } 
+        if (cur.%"mod" (ip?"":"_feed")%) {
             display.AddText("wp", "MOD feedback:")
-            for i, speech in cur.mod {
+            for i, speech in cur.%"mod" (ip?"":"_feed")% {
                 display.AddText("wp", "Speech number " i ":")
                 display.AddEdit("wp")
                 display.AddUpDown("Range1-5 vscore" i, SubStr(speech, 1, 1))
                 display.AddEdit("wp r4 VScroll vnotes" i, SubStr(speech, 3))
+            }
+        }
+        if (!ip && cur.mod) {
+            display.AddText("wp", "Server MOD feedback:")
+            for i, speech in cur.mod {
+                display.AddText("wp", "Speech number " i ":")
+                display.AddEdit("wp Disabled")
+                display.AddUpDown("Range1-5 Disabled" i, SubStr(speech, 1, 1))
+                display.AddEdit("wp r4 VScroll Disabled" i, SubStr(speech, 3))
             }
         }
         display.show()
@@ -137,7 +152,7 @@ primary() {
         display := Munager("Awards info",,10,,(*) => select.show())
         arr := []
         for country, val in countries {
-            unmod := val.unmod?Integer(StrSplit(val.unmod, ":")[1]):0
+            unmod := val.unmod?Integer(StrSplit(val.unmod, ":")[1]):0 + val.unmod_feed?Integer(StrSplit(val.unmod_feed, ":")[1]):0
             tot := 0
             square := 0
             for speech in val.mod {
@@ -145,8 +160,14 @@ primary() {
                 tot += temp
                 square += temp * temp
             }
-            avg := val.mod.Length?tot/val.mod.Length:0
-            arr.Push(["", country, Round(avg+unmod, 2), Round(avg, 2), Round(unmod, 2), Round(Abs(avg-unmod), 2), val.mod.Length?Round(square/val.mod.Length - avg*avg, 2):100])
+            for speech in val.mod_feed {
+                temp := Integer(StrSplit(speech, ":")[1])
+                tot += temp
+                square += temp * temp
+            }
+            l := val.mod.Length?val.mod.Length:0 + val.mod_feed.Length?val.mod_feed.Length:0
+            avg := l?tot/l:0
+            arr.Push(["", country, Round(avg+unmod, 2), Round(avg, 2), Round(unmod, 2), Round(Abs(avg-unmod), 2), l?Round(square/l - avg*avg, 2):100])
         }
         display.AddListView("w500 Grid", ["Country", "Total", "Speech", "UNMOD", "Diff", "Speech dev"], arr)
         display.show()
@@ -163,11 +184,12 @@ primary() {
     select.AddButton("wp", "Speech", (*) => mod(select["del"].Text))
     select.AddButton("wp", "Show feedback", (*) => show())
     select.AddButton("wp", "Awards", (*) => awards())
-    select.AddButton("wp", "Save feedback", (*) => save(false))
-    select.AddButton("wp", "Download from server", (*) => RunWait("git pull", settingsRead("file") "\.."))
     if (ip) {
         select.AddText("wp", "Incoming speeches ")
         select.AddListBox("r3 wp Choose" (ask+2), ["are ignored", "take control", "prompt you"]).OnEvent("Change", (ctrl, *) => ask := ctrl.Value-2)
+    } else {
+        select.AddButton("wp", "Save feedback", (*) => save(false))
+        select.AddButton("wp", "Download from server", (*) => RunWait("git pull", settingsRead("file") "\.."))
     }
     select.show()
 }

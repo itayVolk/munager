@@ -130,7 +130,7 @@ awards() {
     awards := Munager("Awards info",,10,,(*) => chair.show())
     arr := []
     for country, val in countries {
-        unmod := val.unmod?Integer(StrSplit(val.unmod, ":")[1]):0
+        unmod := val.unmod?Integer(StrSplit(val.unmod, ":")[1]):0 + val.unmod_feed?Integer(StrSplit(val.unmod_feed, ":")[1]):0
         tot := 0
         square := 0
         for speech in val.mod {
@@ -138,8 +138,14 @@ awards() {
             tot += temp
             square += temp * temp
         }
-        avg := val.mod.Length?tot/val.mod.Length:0
-        arr.Push(["", country, Round(avg+unmod, 2), Round(avg, 2), Round(unmod, 2), Round(Abs(avg-unmod), 2), val.mod.Length?Round(square/val.mod.Length - avg*avg, 2):100])
+        for speech in val.mod_feed {
+            temp := Integer(StrSplit(speech, ":")[1])
+            tot += temp
+            square += temp * temp
+        }
+        l := val.mod.Length?val.mod.Length:0 + val.mod_feed.Length?val.mod_feed.Length:0
+        avg := l?tot/l:0
+        arr.Push(["", country, Round(avg+unmod, 2), Round(avg, 2), Round(unmod, 2), Round(Abs(avg-unmod), 2), l?Round(square/l - avg*avg, 2):100])
     }
     awards.AddListView("w500 Grid", ["Country", "Total", "Speech", "UNMOD", "Diff", "Speech dev"], arr)
     awards.show()
