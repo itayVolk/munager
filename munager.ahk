@@ -634,7 +634,7 @@ motion() {
             out := show.motions.RemoveAt(i)
             time := InputBox("What is the new time?")
             MsgBox(time.Result)
-            if (time.Result == "Ok") {
+            if (time.Result == "OK") {
                 formatted := formatSecond(time.Value)
                 if (InStr(formatted, ":")) {
                     split := StrSplit(formatted, ":")
@@ -649,7 +649,7 @@ motion() {
             text := out.text
             if (InStr(out.text, "/")) {
                 single := InputBox("What is the new speaking time?")
-                if (single.Result == "Ok") {
+                if (single.Result == "OK") {
                     text := formatSecond(single.Value) "/" StrSplit(out.text, "/",,2)[2]
                 }
             }
