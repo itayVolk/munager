@@ -338,5 +338,5 @@ save(main := true) {
     fp.Close()
     RunWait("git add .", settingsRead("file") "\..")
     RunWait('git commit -m "saved data"', settingsRead("file") "\..")
-    ; RunWait("git push", settingsRead("file") "\..")
+    RunWait("git push", settingsRead("file") "\..")
 }
