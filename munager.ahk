@@ -118,9 +118,9 @@ feedback() {
             display.AddText("wp", "Secondary MOD feedback:")
             for i, speech in cur.mod_feed {
                 display.AddText("wp", "Speech number " i ":")
-                display.AddEdit("wp")
-                display.AddUpDown("Range1-5 vscore" i, SubStr(speech, 1, 1))
-                display.AddEdit("wp r" Min(EditGetLineCount(test.AddEdit("wp", SubStr(speech, 3)).Hwnd, test.Hwnd), 4) " vnotes" i, SubStr(speech, 3))
+                display.AddEdit("wp Disabled")
+                display.AddUpDown("Range1-5 Disabled" i, SubStr(speech, 1, 1))
+                display.AddEdit("wp r" Min(EditGetLineCount(test.AddEdit("wp", SubStr(speech, 3)).Hwnd, test.Hwnd), 4) " Disabled" i, SubStr(speech, 3))
             }
         }
         display.AddButton("wp", "Add speech", (*) => add())
