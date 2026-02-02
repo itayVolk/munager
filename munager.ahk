@@ -561,6 +561,7 @@ motion() {
     control.AddText("xm yp+100 w300", "Proposer")
     control.AddText("yp w417", "Motion")
     control.AddText("yp w97", "Prio")
+    control.AddText("yp wp", "Edit")
     control.AddText("yp wp", "Pass")
     control.AddText("yp wp", "Fail")
     control.norm()
@@ -625,6 +626,16 @@ motion() {
             sort(out.proposer, out.text, ctrl.Value, out.time, SubStr(ctrl.name, 5))
         }
 
+        amend(ctrl, *) {
+            i := 1
+            while (show.motions[i].count != SubStr(ctrl.name, 5)) {
+                i++
+            }
+            out := show.motions.RemoveAt(i)
+
+            sort(out.proposer, out.text, ctrl.Value, out.time, SubStr(ctrl.name, 5))
+        }
+
         sort(proposer, text, priority, time, count) {
             motions := show.motions
 
@@ -672,6 +683,7 @@ motion() {
             show.Destroy()
             control.Destroy()
 
+            MsgBox(obj.time)
             if (InStr(obj.text, "/")) {
                 adjustMulti(guiObjs) {
                     for guiObj in guiObjs {
@@ -872,6 +884,7 @@ motion() {
             control["text" num].SetFont("strike")
             control["prio" num].Enabled := false
             control["edit" num].Enabled := false
+            control["time" num].Enabled := false
             control["pass" num].Enabled := false
             control["fail" num].Enabled := false
             i := 1
@@ -886,6 +899,7 @@ motion() {
         control.AddText("yp w417 vtext" control.count, text)
         control.AddEdit("yp w97 vedit" control.count)
         control.AddUpDown("wp vprio" control.count, control["type"].Value, change)
+        control.AddButton("yp wp h55 vtime" control.count, Chr(0x2713), amend)
         control.AddButton("yp wp h55 vpass" control.count, Chr(0x2713), succeed)
         control.AddButton("yp wp h55 vfail" control.count, Chr(0x2717), fail)
         control.show()
