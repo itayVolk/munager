@@ -28,7 +28,7 @@ list := false
 countries := {}
 fileFinder()
 
-chair := Munager("Chair screen",,,,(*) => ExitApp())
+chair := Munager("Chair screen",,40,,(*) => ExitApp())
 chair.AddButton("Center w500", "Roll call", (*) => call())
 chair.AddButton("Center wp", "Motions", (*) => motion())
 chair.AddButton("Center wp", "Roll call vote", (*) => vote())
