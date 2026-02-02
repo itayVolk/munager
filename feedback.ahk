@@ -187,7 +187,7 @@ primary() {
     if (ip) {
         select.AddText("wp", "Incoming speeches ")
         select.AddListBox("r3 wp Choose" (ask+2), ["are ignored", "take control", "prompt you"]).OnEvent("Change", (ctrl, *) => ask := ctrl.Value-2)
-    } else {
+    } else if (FileExist(settingsRead("file") "\..\.git")){
         select.AddButton("wp", "Save feedback", (*) => save(,false))
         select.AddButton("wp", "Download from server", (*) => RunWait("git pull", settingsRead("file") "\.."))
     }

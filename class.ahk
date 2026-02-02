@@ -336,7 +336,7 @@ save(sync := true, main := true) {
     }
     fp.Write(Trim(text, " `t`n`r"))
     fp.Close()
-    if (sync) {
+    if (sync && FileExist(settingsRead("file") "\..\.git")) {
         RunWait("git add .", settingsRead("file") "\..")
         RunWait('git commit -m "saved data"', settingsRead("file") "\..")
         RunWait("git push", settingsRead("file") "\..")

@@ -34,7 +34,7 @@ chair.AddButton("Center wp", "Motions", (*) => motion())
 chair.AddButton("Center wp", "Roll call vote", (*) => vote())
 chair.AddButton("Center wp", "Show feedback", (*) => feedback())
 chair.AddButton("Center wp", "Awards", (*) => awards())
-if (single) {
+if (single && FileExist(settingsRead("file") "\..\.git")) {
     chair.AddButton("Center wp", "Save", (*) => save())
     chair.AddButton("Center wp", "Sync secondary", (*) => RunWait("git pull", settingsRead("file") "\.."))
 }
