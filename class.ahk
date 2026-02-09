@@ -202,7 +202,7 @@ OnScroll(WP, LP, M, H) {
     }
 }
 
-fileFinder() {
+fileFinder(partial?) {
     if(!settingsRead("file") || !FileExist(settingsRead("file"))) {
         if (MsgBox("Do you have a csv file?",,4) == "Yes") {
             MsgBox("Please select the .csv file with the countries.")
@@ -241,30 +241,34 @@ fileFinder() {
         }
     }
 
-    temp := StrSplit(FileRead(settingsRead("file")),"`n")
-    global countries := Map()
-    for country in temp {
-        if (!country) {
-            continue
-        }
-        split := StrSplit(country, ",")
-        while (split.Length < 4) {
-            split.Push("")
-        }
-        countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"), unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: "", mod_feed: []}
-        if (split.Length >= 5) {
-            i := 5
-            while (i <= split.Length) {
-                if (!Trim(split[i], " `t`n`r")) {
-                    break
+    if (FileExist(settingsRead("file") "\..\.git"))
+        RunWait("git pull", settingsRead("file") "\..")
+    if (!IsSet(partial) || partial == 1) {
+        temp := StrSplit(FileRead(settingsRead("file")),"`n")
+        global countries := Map()
+        for country in temp {
+            if (!country) {
+                continue
+            }
+            split := StrSplit(country, ",")
+            while (split.Length < 4) {
+                split.Push("")
+            }
+            countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"), unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: "", mod_feed: []}
+            if (split.Length >= 5) {
+                i := 5
+                while (i <= split.Length) {
+                    if (!Trim(split[i], " `t`n`r")) {
+                        break
+                    }
+                    countries[Trim(split[1], " `t`n`r")].mod.Push(Trim(StrReplace(StrReplace(split[i], "``n", "`r`n"), "``c", ","), " `t`n`r"))
+                    i++
                 }
-                countries[Trim(split[1], " `t`n`r")].mod.Push(Trim(StrReplace(StrReplace(split[i], "``n", "`r`n"), "``c", ","), " `t`n`r"))
-                i++
             }
         }
     }
 
-    if (FileExist(settingsRead("file") "\..\secondary.csv")) {
+    if ((!IsSet(partial) || partial == -1) && FileExist(settingsRead("file") "\..\secondary.csv")) {
         temp := StrSplit(FileRead(settingsRead("file") "\..\secondary.csv"),"`n")
         for country in temp {
             if (!country) {
@@ -337,8 +341,10 @@ save(sync := true, main := true) {
     fp.Write(Trim(text, " `t`n`r"))
     fp.Close()
     if (sync && FileExist(settingsRead("file") "\..\.git")) {
-        RunWait("git add .", settingsRead("file") "\..")
-        RunWait('git commit -m "saved data"', settingsRead("file") "\..")
+        name := ""
+        SplitPath(settingsRead("file"), &name)
+        RunWait("git add " (main?name:"secondary.csv"), settingsRead("file") "\..")
+        RunWait('git commit -m "saved ' (main?"primary":"secondary") ' data"', settingsRead("file") "\..")
         RunWait("git push", settingsRead("file") "\..")
     }
 }
