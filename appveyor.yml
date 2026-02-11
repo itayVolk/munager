@@ -4,6 +4,3 @@ install:
   - choco install autohotkey.install
 
 build: false
-
-before_test:
-  - cmd: cd tests
