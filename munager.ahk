@@ -331,7 +331,7 @@ write(text) {
 }
 
 if (!settingsRead("listT")) {
-    MsgBox("You can use control+l to toggle round robin/speakers list and to add countries to the speakers list")
+    MsgBox("You can use control+l to toggle round robin/speakers list or add to speakers list")
     settingsWrite("listT", true)
 }
 ^l:: {
