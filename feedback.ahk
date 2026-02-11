@@ -53,6 +53,7 @@ if (ip.Result == "OK") {
     client.write("start")
 } else {
     ip := ""
+    countries := {}
     fileFinder()
     primary()
     OnExit((*) => save(, false))
@@ -187,7 +188,7 @@ primary() {
     if (ip) {
         select.AddText("wp", "Incoming speeches ")
         select.AddListBox("r3 wp Choose" (ask+2), ["are ignored", "take control", "prompt you"]).OnEvent("Change", (ctrl, *) => ask := ctrl.Value-2)
-    } else if (FileExist(settingsRead("file") "\..\.git")){
+    } else {
         select.AddButton("wp", "Save feedback", (*) => save(,false))
         select.AddButton("wp", "Download from server", (*) => fileFinder(-1))
     }

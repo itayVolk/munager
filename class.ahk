@@ -245,6 +245,7 @@ fileFinder(partial?) {
         RunWait("git pull", settingsRead("file") "\..")
     if (!IsSet(partial) || partial == 1) {
         temp := StrSplit(FileRead(settingsRead("file")),"`n")
+        past := countries
         global countries := Map()
         for country in temp {
             if (!country) {
@@ -254,7 +255,9 @@ fileFinder(partial?) {
             while (split.Length < 4) {
                 split.Push("")
             }
-            countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"), unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: "", mod_feed: []}
+            prev := past.Get(Trim(split[1], " `t`n`r"), {unmod_feed: "", mod_feed: []})
+            countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"),
+                        unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: prev.unmod_feed, mod_feed: prev.mod_feed}
             if (split.Length >= 5) {
                 i := 5
                 while (i <= split.Length) {
@@ -274,6 +277,7 @@ fileFinder(partial?) {
             if (!country) {
                 continue
             }
+            country.mod_feed := []
             split := StrSplit(country, ",")
             while (split.Length < 2) {
                 split.Push("")
@@ -343,8 +347,7 @@ save(sync := true, main := true) {
     if (sync && FileExist(settingsRead("file") "\..\.git")) {
         name := ""
         SplitPath(settingsRead("file"), &name)
-        RunWait("git add " (main?name:"secondary.csv"), settingsRead("file") "\..")
-        RunWait('git commit -m "saved ' (main?"primary":"secondary") ' data"', settingsRead("file") "\..")
+        RunWait('git commit --only ' (main?name:"secondary.csv") ' -m "saved ' (main?"primary":"secondary") ' data"', settingsRead("file") "\..")
         RunWait("git push", settingsRead("file") "\..")
     }
 }
