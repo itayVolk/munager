@@ -2,7 +2,7 @@
 #Include JSON.ahk
 #Include class.ahk
 #SingleInstance Force
-single := MsgBox("Do you want direct internet communication? Program will attempt to use git if click no.",,0x4) == "No"
+single := MsgBox("Do you want direct internet communication? Program will always attempt to use git.",,0x4) == "No"
 if (!single) {
     if (MsgBox("Your IP address is " . SysGetIPAddresses()[1] " copy to clipboard? ",,0x4)=="Yes") {
         A_Clipboard := SysGetIPAddresses()[1]

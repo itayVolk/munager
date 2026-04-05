@@ -75,6 +75,11 @@ mod(country, ask := 0) {
         select.show()
     }
 
+    if (country == "") {
+        MsgBox("Please select a country first",, 0x10)
+        select.show()
+        return
+    }
     if (!ask or (ask == 1 and MsgBox("Do you want to give feedback on " country "'s speech?",,0x4) == "Yes")) {
         select.Hide()
         cur := countries[country]
@@ -112,6 +117,11 @@ primary() {
             select.show()
         }
 
+        if (select["del"].Text == "") {
+            MsgBox("Please select a country first",, 0x10)
+            select.show()
+            return
+        }
         select.Hide()
         cur := countries[select["del"].Text]
         display := Munager("Feedback screen",,30,1,(*) => update())

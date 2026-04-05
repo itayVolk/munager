@@ -255,7 +255,11 @@ fileFinder(partial?) {
             while (split.Length < 4) {
                 split.Push("")
             }
-            prev := past.Get(Trim(split[1], " `t`n`r"), {unmod_feed: "", mod_feed: []})
+            prev := {unmod_feed: "", mod_feed: []}
+            if (ObjOwnPropCount(past)) {
+                MsgBox(past)
+                prev := past.Get(Trim(split[1], " `t`n`r"), prev)
+            }
             countries[Trim(split[1], " `t`n`r")] := {type: Trim(split[2], " `t`n`r"), stat: Trim(split[3], " `t`n`r"),
                         unmod: Trim(StrReplace(StrReplace(split[4], "``n", "`r`n"), "``c", ","), " `t`n`r"), mod: [], unmod_feed: prev.unmod_feed, mod_feed: prev.mod_feed}
             if (split.Length >= 5) {
@@ -277,12 +281,12 @@ fileFinder(partial?) {
             if (!country) {
                 continue
             }
-            country.mod_feed := []
             split := StrSplit(country, ",")
             while (split.Length < 2) {
                 split.Push("")
             }
             countries[Trim(split[1], " `t`n`r")].unmod_feed := Trim(StrReplace(StrReplace(split[2], "``n", "`r`n"), "``c", ","), " `t`n`r")
+            countries[Trim(split[1], " `t`n`r")].mod_feed := []
             if (split.Length >= 3) {
                 i := 3
                 while (i <= split.Length) {
