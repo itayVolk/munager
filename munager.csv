@@ -1,19 +1,19 @@
-Bahrain,,P,,3:testing main
-China,V,P,,2:main
-Colombia,,P,3:testing
-Democratic Republic of the Congo,,P,
-Denmark,,P,
-France,V,,
-Greece,,V,
-Iran,O,,
-Iraq,O,,
-Latvia,,,
-Liberia,,,
-Pakistan,,,
-Panama,,,
-Russia,V,,
-Somalia,,,
-Syria,O,,
-Turkey,O,,
-United Kingdom,V,,
-United States,V,,
+Bahrain,,P,4:testing main,3:testing second,|
+China,V,P,,,3:testing main,|,3:testing second
+Colombia,,V,,,|
+Democratic Republic of the Congo,,P,,,|
+Denmark,,P,,,|
+France,V,P,,,|
+Greece,,V,,,|
+Iran,O,P,,,|
+Iraq,O,P,,,|
+Latvia,,P,,,|
+Liberia,,P,,,|
+Pakistan,,,,,|
+Panama,,,,,|
+Russia,V,,,,|
+Somalia,,,,,|
+Syria,O,P,,,|
+Turkey,O,P,,,|
+United Kingdom,V,,,,|
+United States,V,,,,|

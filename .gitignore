@@ -1,2 +1,3 @@
-munager.code-workspace
-munager.ini
+*.code-workspace
+*.ini
+__pycache__/
