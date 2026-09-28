@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import random
-import socket
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 import tkinter.font as tkfont
@@ -25,7 +24,7 @@ speakers_list: list[str] = []
 
 def format_second(s: int) -> str:
     s = int(s)
-    return f"{s // 60}:{s % 66:02d}"
+    return f"{s // 60}:{s % 60:02d}"
 
 
 def parse_time(s: str) -> int:
@@ -949,9 +948,11 @@ def motion() -> None:
     control.AddText("", "Proposer:")
     control.AddDDL("w300 sort vprop", present_countries())
     control.AddText("", "Type / priority:")
+    _list = bool(data.settings_read("list"))
     type_ddl = control.AddDDL(
         "w300 vtype",
-        ["Text", "MOD", "UNMOD", "Change speaking time / open list"])
+        ["Text", "MOD", "UNMOD",
+         "Open speakers list" if _list else "Change RR time"])
 
     def find(num: int) -> int:
         for i, m in enumerate(motions):
@@ -1145,17 +1146,21 @@ def build_chair() -> None:
     global chair
     chair = Munager("munager", font=30, bold=1,
                     close=lambda: Munager.root().destroy())
-    chair.AddButton("Center w500", "Roll call", lambda e: call())
-    chair.AddButton("Center w500", "Motions", lambda e: motion())
-    chair.AddButton("Center w500", "Vote", lambda e: vote())
-    chair.AddButton("Center w500", "Feedback", lambda e: feedback())
-    chair.AddButton("Center w500", "Awards", lambda e: awards())
+    chair.AddButton("Center", "Roll call", lambda e: call())
+    chair.AddButton("Center", "Motions", lambda e: motion())
+    chair.AddButton("Center", "Vote", lambda e: vote())
+    chair.AddButton("Center", "Feedback", lambda e: feedback())
+    chair.AddButton("Center", "Awards", lambda e: awards())
     if single:
-        chair.AddButton("Center w500", "Save", lambda e: data.save(sync=single))
-        chair.AddButton("Center w500", "Sync (git pull)",
+        chair.AddButton("Center", "Save",
+                        lambda e: data.save(sync=single))
+        chair.AddButton("Center", "Sync (git pull)",
                         lambda e: (data.load(), rebuild_chair()))
-    chair.AddButton("Center w500", "Settings", lambda e: settings())
+    chair.AddButton("Center", "Settings", lambda e: settings())
     chair.show()
+    chair.win.update_idletasks()
+    h = chair.win.winfo_height()
+    chair.win.minsize(600, h)          # force a wide menu
 
 
 def rebuild_chair() -> None:
@@ -1172,13 +1177,15 @@ def show_address(addr: str, after: Callable[[], None]) -> None:
         after()
 
     win = Munager("munager", font=20, close=done)
-    win.AddText("w500 Center", "Co-chairs connect to this IP:")
-    e = win.AddEdit("wp vaddr", addr)
-    win.AddButton("wp", "OK", lambda ev: done())
+    win.AddText("Center", "Co-chairs connect to this IP:")
+    e = win.AddEdit("w220 r1 vaddr", addr)      # small, single-line
+    win.AddButton("Center", "OK", lambda ev: done())
     win.show()
+    win.win.update_idletasks()
     txt = cast(tk.Text, e.widget)
     txt.tag_add("sel", "1.0", "end-1c")
     txt.focus_set()
+    win.win.minsize(260, win.win.winfo_height())
 
 def main() -> None:
     global single

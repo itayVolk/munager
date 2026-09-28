@@ -3,13 +3,29 @@ from __future__ import annotations
 import configparser
 import csv
 import os
+import sys
 import statistics
 import subprocess
 from typing import Any, Optional
 
-# Bootstrap ini next to THIS script: remembers only the working directory.
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BOOTSTRAP_INI = os.path.join(_SCRIPT_DIR, "munager_boot.ini")
+def _config_home() -> str:
+    """A stable, writable per-user folder that survives runs (all OSes)."""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:  # Linux / other
+        base = (os.environ.get("XDG_CONFIG_HOME")
+                or os.path.expanduser("~/.config"))
+    d = os.path.join(base, "munager")
+    try:
+        os.makedirs(d, exist_ok=True)
+        return d
+    except OSError:
+        return os.path.dirname(os.path.abspath(sys.argv[0]))
+
+# Bootstrap ini in a STABLE per-user folder (PyInstaller/one-file safe).
+BOOTSTRAP_INI = os.path.join(_config_home(), "munager_boot.ini")
 BOOT_SECTION = "boot"
 
 # The real settings ini lives INSIDE the working directory.

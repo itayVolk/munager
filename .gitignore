@@ -1,3 +1,5 @@
 *.code-workspace
 *.ini
 __pycache__/
+build/
+*.spec
