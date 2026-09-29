@@ -215,9 +215,7 @@ def call() -> None:
     ch.Hide()
 
     control = Munager("Roll call (control)", font=20,
-                      close=lambda: (data.save(sync=single),
-                                     control.Destroy(),
-                                     display.Destroy(), ch.show()))
+                      close=lambda: (submit(), ch.show()))
     display = Munager("Roll call (display)", font=30, close=lambda: None)
     control.link_display(display)
 
