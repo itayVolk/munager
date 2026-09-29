@@ -5,7 +5,7 @@ import random
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 import tkinter.font as tkfont
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional
 
 import munager_data as data
 import munager_net as net
@@ -158,7 +158,6 @@ def _on_connection(cli: net.LengthSocket) -> None:
 
 
 def feedback() -> None:
-    global chair
     assert chair is not None
     ch = chair
     ch.Hide()
@@ -180,8 +179,8 @@ def feedback() -> None:
 
     select = Munager("Feedback selector", font=30, bold=1,
                      close=lambda: (select.Destroy(), ch.show()))
-    select.AddDDL("w500 sort vdel", sorted_countries())
-    select.AddButton("wp", "Select", lambda e: chosen(select["del"]))
+    select.AddDDL(sorted_countries(), width=500, sort=True)
+    select.AddButton("Select", event=chosen)
     select.show()
 
 
@@ -210,8 +209,8 @@ def broadcast_presence() -> None:
     for cli in list(server_clients):
         cli.write(payload)
 
+
 def call() -> None:
-    global chair
     assert chair is not None
     ch = chair
     ch.Hide()
@@ -274,7 +273,7 @@ def call() -> None:
             r["vot"].widget["relief"] = "sunken" if state == "V" else "raised"
         refresh_display()
 
-    c_summary = control.AddText("w700", "")
+    c_summary = control.AddText("", width=700)
 
     for name in order:
         c = countries[name]
@@ -300,10 +299,10 @@ def call() -> None:
         _refresh_quick()                # sync to new presences
         ch.show()
 
-    control.AddButton("", "Submit", lambda e: submit())
+    control.AddButton("Submit", event=lambda e: submit())
 
-    summary = display.AddText("", "")
-    d_view = display.AddListView("w600 Grid", ["Country", "Status"])
+    summary = display.AddText("")
+    d_view = display.AddListView(["Country", "Status"])
 
     for name in order:
         set_state(name, countries[name].stat)
@@ -315,7 +314,6 @@ def call() -> None:
 # ---- settings ---------------------------------------------------------------
 
 def settings() -> None:
-    global chair
     assert chair is not None
     ch = chair
     ch.Hide()
@@ -391,7 +389,7 @@ def settings() -> None:
         r.button("Re-enable" if tip_on else "Suppress",
                  lambda e: toggle_tip())
 
-        view.AddButton("", "Back", lambda e: (view.Destroy(), ch.show()))
+        view.AddButton("Back", event=lambda e: (view.Destroy(), ch.show()))
         view.show()
 
     build()
@@ -401,39 +399,38 @@ def add_countries(parent: Munager) -> None:
     parent.Hide()
     entry = Munager("Add countries", font=20,
                     close=lambda: (entry.Destroy(), parent.show()))
-    entry.AddText("w400", "Country name:")
-    entry.AddEdit("wp vname")
-    entry.AddText("wp", "Type:")
-    entry.AddDDL("wp vtype",
-                 ["Normal (can vote)", "Veto holder", "Observer"])
+    entry.AddText("Country name:", width=400)
+    name = entry.AddEdit()
+    entry.AddText("Type:")
+    type = entry.AddDDL(["Normal (can vote)", "Veto holder", "Observer"])
 
     def add_one() -> None:
-        name = entry["name"].Text.strip()
-        if not name:
+        name_val = name.Text.strip()
+        if not name_val:
             messagebox.showerror("munager", "Enter a country name.")
             return
-        if name in countries:
-            messagebox.showerror("munager", f"{name} already exists.")
+        if name_val in countries:
+            messagebox.showerror("munager", f"{name_val} already exists.")
             return
-        ctype = {2: "V", 3: "O"}.get(entry["type"].Index, "")
-        c = data.Country(name)
+        ctype = {2: "V", 3: "O"}.get(type.Index, "")
+        c = data.Country(name_val)
         c.type = ctype
         c.stat = ""
-        countries[name] = c
-        entry["name"].Text = ""
-        messagebox.showinfo("munager", f"Added {name}.")
+        countries[name_val] = c
+        name.Text = ""
+        messagebox.showinfo("munager", f"Added {name_val}.")
 
     def done() -> None:
         data.save(sync=single)
         entry.Destroy()
         parent.show()
 
-    entry.AddButton("wp", "Add", lambda e: add_one())
-    entry.AddButton("wp", "Done (save)", lambda e: done())
+    entry.AddButton("Add", event=lambda e: add_one())
+    entry.AddButton("Done (save)", event=lambda e: done())
     entry.show()
 
-# ---- hotkey tip -------------------------------------------------------------
 
+# ---- hotkey tip -------------------------------------------------------------
 def tip() -> None:
     if data.settings_read("tip"):
         return
@@ -446,7 +443,6 @@ def tip() -> None:
 
 
 # ---- speech feedback entry --------------------------------------------------
-
 def enter_feedback(country: str, is_unmod: bool,
                    after: Callable[[], None]) -> None:
     c = countries[country]
@@ -466,9 +462,7 @@ def enter_feedback(country: str, is_unmod: bool,
 
 
 # ---- voting -----------------------------------------------------------------
-
 def vote() -> None:
-    global chair
     assert chair is not None
     ch = chair
     ch.Hide()
@@ -490,8 +484,8 @@ def vote() -> None:
                       close=lambda: None)
     control.link_display(display)
 
-    cur = display.AddText("w600 Center", "")
-    total = display.AddText("w600 Center", "")
+    cur = display.AddText("", width=600)
+    total = display.AddText("", width=600)
 
     def queue() -> list[str]:
         return voters if phase["n"] == 1 else deferred
@@ -508,7 +502,6 @@ def vote() -> None:
                       f'Abstain: {state["abstain"]}   Veto: {state["veto"]}')
 
     def finish() -> None:
-        p = sum(1 for n in voters)
         blocked = veto_needed and state["veto"] >= veto_needed
         passed = (state["yes"] > state["no"]) and not blocked
         verdict = ("BLOCKED by veto" if blocked
@@ -522,13 +515,15 @@ def vote() -> None:
         display.Destroy()
         ch.show()
 
+    passed_btn: Ctrl
+
     def advance() -> None:
         q = queue()
         if state["i"] >= len(q):
             if phase["n"] == 1 and deferred:
                 phase["n"] = 2
                 state["i"] = 0
-                control["Pass"].widget["state"] = "disabled"
+                passed_btn.widget["state"] = "disabled"
             else:
                 finish()
                 return
@@ -559,21 +554,20 @@ def vote() -> None:
             finish()
             return
         cur.Text = name
-        control["cur"].Text = (f"[DEFERRED] {name}"
-                               if phase["n"] == 2 else name)
-        control["Abstain"].widget["state"] = (
+        cur_ctrl.Text = (f"[DEFERRED] {name}" if phase["n"] == 2 else name)
+        abtstain_btn.widget["state"] = (
             "normal" if abstain_allowed(name) else "disabled")
-        control["Pass"].widget["state"] = (
+        passed_btn.widget["state"] = (
             "disabled" if phase["n"] == 2 else "normal")
         control.win.update_idletasks()
         control.show()
 
     widest = max((len(n) for n in voters), default=10) + 12
-    control.AddText(f"w{widest * 12} vcur", "")
-    control.AddButton("", "For", lambda e: cast("yes"))
-    control.AddButton("vAbstain", "Abstain", lambda e: cast("abstain"))
-    control.AddButton("", "Against", lambda e: cast("no"))
-    control.AddButton("vPass", "Pass", lambda e: do_pass())
+    cur_ctrl = control.AddText("", width=widest * 12)
+    control.AddButton("For", event=lambda e: cast("yes"))
+    abtstain_btn = control.AddButton("Abstain", event=lambda e: cast("abstain"))
+    control.AddButton("Against", event=lambda e: cast("no"))
+    passed_btn = control.AddButton("Pass", event=lambda e: do_pass())
 
     update_total()
     show_current()
@@ -642,8 +636,8 @@ class CaucusWindow:
         tip()
 
         self.queue = []
-        if mode == "open": # non-speakers list/round robin: empty queue initially
-            if not use_list: # round robin auto-fills
+        if mode == "open":  # non-speakers list/round robin: empty queue initially
+            if not use_list:  # round robin auto-fills
                 pool = present_countries()
                 if veto_only:
                     pool = [n for n in pool if countries[n].type == "V"]
@@ -664,55 +658,54 @@ class CaucusWindow:
         # ---- display window ----
         self.display = Munager(f"{title} (display)", font=40, bold=1,
                                close=lambda: None)
-        self.d_name = self.display.AddText("w900 Center", title)
-        self.d_speaker = self.display.AddText("w900 Center", "")
-        self.d_bar = self.display.AddProgress("w900")
+        self.d_name = self.display.AddText(title, width=900)
+        self.d_speaker = self.display.AddText("", width=900)
+        self.d_bar = self.display.AddProgress(width=900)
         if self.has_total:
-            self.d_total = self.display.AddText("w900 Center", "")
-            self.d_total_bar = self.display.AddProgress("w900")
+            self.d_total = self.display.AddText("", width=900)
+            self.d_total_bar = self.display.AddProgress(width=900)
         if self.has_speakers:
-            self.display.AddText("w900 Center", "Up next:")
-            self.d_next = self.display.AddListView("w900", ["Next speakers"])
+            self.display.AddText("Up next:", width=900)
+            self.d_next = self.display.AddListView(["Next speakers"])
 
         # ---- control window ----
         self.control = Munager(f"{title} (control)", font=22,
                                close=self._close)
-        self.c_speaker = self.control.AddText("w500", "")
+        self.c_speaker = self.control.AddText("", width=500)
         if self.has_total:
-            self.c_total = self.control.AddText("w500", "")
+            self.c_total = self.control.AddText("", width=500)
         crow = self.control.AddRow()
         self.startbtn = crow.button("Start", lambda e: self.toggle())
         self._sync_button()
         crow.button("Reset", lambda e: self.reset())
 
         if self.has_speakers:
-            self.control.AddText("", "Add speaker:")
+            self.control.AddText("Add speaker:")
             arow = self.control.AddRow()
             pool = present_countries()
             if self.veto_only:
                 pool = [n for n in pool if countries[n].type == "V"]
-            self.add_ddl = self.control.AddDDL("w300 sort vadd", pool)
+            self.add_ddl = self.control.AddDDL(pool, width=300, sort=True)
             arow.button("Add", lambda e: self._add_speaker())
             # full queue on the control screen with remove buttons
-            self.control.AddText("", "Speakers:")
+            self.control.AddText("Speakers:")
             self.speaker_rows: list[tk.Frame] = []
             self.sp_holder = self.control.AddRow()   # container marker
 
         # inline feedback
         if self.mode == "unmod":
-            self.control.AddText("", "Delegate:")
-            self.u_ddl = self.control.AddDDL(
-                "w300 sort vdel", present_countries())
+            self.control.AddText("Delegate:")
+            self.u_ddl = self.control.AddDDL(present_countries(), width=300, sort=True,
+                                             event=lambda c: self._unmod_switch())
             self._unmod_current: Optional[str] = None
-            self.u_ddl.on_change(lambda c=self.u_ddl: self._unmod_switch())
-        self.control.AddText("", "Score (1-5):")
-        self.fb_score = self.control.AddUpDown("Range1-5 vscore", 3)
-        self.control.AddText("", "Notes:")
-        self.fb_notes = self.control.AddEdit("r3 VScroll vnotes")
+        self.control.AddText("Score (1-5):")
+        self.fb_score = self.control.AddUpDown(3)
+        self.control.AddText("Notes:")
+        self.fb_notes = self.control.AddEdit("", rows=3)
 
         next_label = "Next speaker" if self.has_speakers else "Save feedback"
-        self.control.AddButton("", next_label,
-                               lambda e: self._next_speaker())
+        self.control.AddButton(next_label,
+                               event=lambda e: self._next_speaker())
 
         self.control.bind_mouse("middle", lambda *_a: self.reset())
         # bind right-click directly; some bind_mouse impls miss <Button-3>
@@ -810,7 +803,6 @@ class CaucusWindow:
             self.total_left -= 1
         self._render()
         self._schedule()
-
 
     # ---- speaker flow --------------------------------------------------
     def _start_speaker(self) -> None:
@@ -914,11 +906,11 @@ class CaucusWindow:
         if self.per_speech:
             frac = max(0, min(1, self.speaker_left / self.per_speech))
             self.d_bar.Value = int(frac * 100)
-            if frac <= 1/3:
+            if frac <= 1 / 3:
                 self.d_bar.Opt("cRed")
             elif frac <= 0.5:
                 self.d_bar.Opt("cYellow")
-            elif frac <= 2/3:
+            elif frac <= 2 / 3:
                 self.d_bar.Opt("cGreen")
             else:
                 self.d_bar.Opt("cDefault")
@@ -945,7 +937,6 @@ class CaucusWindow:
 
 
 def motion() -> None:
-    global chair
     assert chair is not None
     ch = chair
     ch.Hide()
@@ -960,14 +951,13 @@ def motion() -> None:
     board = Munager("Motions", font=30, close=lambda: None)
     control.link_display(board)
 
-    control.AddText("", "Proposer:")
-    control.AddDDL("w300 sort vprop", present_countries())
-    control.AddText("", "Type / priority:")
+    prop_ctrl = control.AddText("Proposer:")
+    control.AddDDL(present_countries(), width=300, sort=True)
+    control.AddText("Type / priority:")
     _list = bool(data.settings_read("list"))
-    type_ddl = control.AddDDL(
-        "w300 vtype",
-        ["Text", "MOD", "UNMOD",
-         "Open speakers list" if _list else "Change RR time"])
+    type_ddl = control.AddDDL(["Text", "MOD", "UNMOD",
+                               "Open speakers list" if _list else "Change RR time"],
+                              width=300)
 
     def find(num: int) -> int:
         for i, m in enumerate(motions):
@@ -1029,8 +1019,8 @@ def motion() -> None:
         board = Munager("Motions", font=30, close=lambda: None)
         control.other = board
         for m in motions:
-            board.AddText("w500", m.proposer)
-            board.AddText("w900 wrap2", m.text)
+            board.AddText(m.proposer, width=500)
+            board.AddText(m.text, width=900, clamp2=True)
         board.show(1)
 
     def fail(num: int) -> None:
@@ -1080,7 +1070,7 @@ def motion() -> None:
         if kind == 0:
             messagebox.showerror("munager", "Please select a type.")
             return
-        prop = control["prop"].Text
+        prop = prop_ctrl.Text
 
         # --- Change speaking time / open list ---
         veto_only = False
@@ -1131,7 +1121,7 @@ def motion() -> None:
         m.veto_only = veto_only if kind == 4 else False
         sort_insert(m)
 
-    control.AddButton("", "Add motion", lambda e: add_motion())
+    control.AddButton("Add motion", event=lambda e: add_motion())
 
     def open_speaking() -> None:
         use_list = bool(data.settings_read("list"))
@@ -1145,14 +1135,13 @@ def motion() -> None:
 
     open_label = ("Open speakers list"
                   if data.settings_read("list") else "Start round robin")
-    control.AddButton("", open_label, lambda e: open_speaking())
+    control.AddButton(open_label, event=lambda e: open_speaking())
 
-    control.AddButton("", "Back",
-                      lambda e: (control.Destroy(),
-                                 board.Destroy(), ch.show()))
+    control.AddButton("Back", event=lambda e: (control.Destroy(), board.Destroy(), ch.show()))
 
     control.show()
     board.show(1)
+
 
 # ---- quick edit (presence / speakers list) ----------------------------------
 def _clear_list_caucus(cw: "CaucusWindow") -> None:
@@ -1160,6 +1149,7 @@ def _clear_list_caucus(cw: "CaucusWindow") -> None:
     if getattr(cw, "_is_list_caucus", False):
         list_caucus_active = False
         _refresh_quick()
+
 
 _quick_state: dict[str, Any] = {"sel": None}
 
@@ -1214,22 +1204,19 @@ def _quick_build() -> None:
 
     use_list = bool(data.settings_read("list"))
 
-    summary = quick.AddText("w700 vsummary", _quick_counts_text())
+    summary = quick.AddText(_quick_counts_text(), width=700)
 
-    quick.AddText("", "Country:")
-    ddl = quick.AddDDL("w320 sort vqdel", sorted_countries())
-
-    quick.AddText("w700 vpower", "Power: —")
+    quick.AddText("Country:")
+    ddl = quick.AddDDL(sorted_countries(), width=320, sort=True,
+                       event=lambda c: refresh_selection())
+    power = quick.AddText("Power: —", width=700)
 
     prow = quick.AddRow()
     b_abs = prow.button("Absent", lambda e: set_pres(""))
     b_pre = prow.button("Present", lambda e: set_pres("P"))
     b_vot = prow.button("Present & Voting", lambda e: set_pres("V"))
 
-    add_btn = quick.AddButton("vqadd", "Add to speakers list",
-                              lambda e: add_to_list())
-
-    win_local = quick
+    add_btn = quick.AddButton("Add to speakers list", event=lambda e: add_to_list())
 
     # ---- behaviour ----
     def selected() -> Optional[str]:
@@ -1240,7 +1227,7 @@ def _quick_build() -> None:
         name = selected()
         _quick_state["sel"] = name
         if name is None:
-            win_local["power"].Text = "Power: —"
+            power.Text = "Power: —"
             for b in (b_abs, b_pre, b_vot):
                 b.widget["state"] = "disabled"
                 b.widget["relief"] = "raised"
@@ -1248,7 +1235,7 @@ def _quick_build() -> None:
             summary.Text = _quick_counts_text()
             return
         c = countries[name]
-        win_local["power"].Text = f"Power: {_power_label(c)}"
+        power.Text = f"Power: {_power_label(c)}"
 
         b_abs.widget["state"] = "normal"
         b_pre.widget["state"] = "normal"
@@ -1285,8 +1272,6 @@ def _quick_build() -> None:
             return
         speakers_list.append(name)
 
-    ddl.on_change(lambda c=ddl: refresh_selection())
-
     # restore prior selection if still valid
     if prev_sel and prev_sel in countries:
         ddl.Text = prev_sel
@@ -1303,17 +1288,15 @@ def build_chair() -> None:
     global chair
     chair = Munager("munager", font=30, bold=1,
                     close=lambda: Munager.root().destroy())
-    chair.AddButton("Center", "Roll call", lambda e: call())
-    chair.AddButton("Center", "Motions", lambda e: motion())
-    chair.AddButton("Center", "Vote", lambda e: vote())
-    chair.AddButton("Center", "Feedback", lambda e: feedback())
-    chair.AddButton("Center", "Awards", lambda e: awards())
+    chair.AddButton("Roll call", event=lambda e: call())
+    chair.AddButton("Motions", event=lambda e: motion())
+    chair.AddButton("Vote", event=lambda e: vote())
+    chair.AddButton("Feedback", event=lambda e: feedback())
+    chair.AddButton("Awards", event=lambda e: awards())
     if single:
-        chair.AddButton("Center", "Save",
-                        lambda e: data.save(sync=single))
-        chair.AddButton("Center", "Sync (git pull)",
-                        lambda e: (data.load(), rebuild_chair()))
-    chair.AddButton("Center", "Settings", lambda e: settings())
+        chair.AddButton("Save", event=lambda e: data.save(sync=single))
+        chair.AddButton("Sync (git pull)", event=lambda e: (data.load(), rebuild_chair()))
+    chair.AddButton("Settings", event=lambda e: settings())
     chair.show()
     chair.win.update_idletasks()
     h = chair.win.winfo_height()
@@ -1325,6 +1308,7 @@ def rebuild_chair() -> None:
         chair.Destroy()
     build_chair()
     _refresh_quick()
+
 
 def _start_chair() -> None:
     build_chair()
@@ -1339,17 +1323,15 @@ def show_address(addrs: list[str], after: Callable[[], None]) -> None:
         after()
 
     win = Munager("munager", font=20, close=done)
-    win.AddText("Center", "Co-chairs connect to this IP:")
-    text = "\n".join(addrs) if addrs else "(no network address found)"
-    rows = max(len(addrs), 1)
-    e = win.AddEdit(f"w260 r{rows} vaddr", text)
-    win.AddButton("Center", "OK", lambda ev: done())
+    win.AddText("Co-chairs connect to this IP:", width=400)
+    lines = [addr.strip() for addr in addrs] if addrs else \
+            ["(no network address found)"]
+    text = "\n".join(lines)
+    longest = max((len(x) for x in lines), default=20)
+    win.AddEdit(text, rows=len(lines), width=longest + 2, disabled=True, select_on_focus=True)
+    win.AddButton("OK", event=lambda ev: done())
     win.show()
-    win.win.update_idletasks()
-    txt = cast(tk.Text, e.widget)
-    txt.tag_add("sel", "1.0", "end-1c")
-    txt.focus_set()
-    win.win.minsize(300, win.win.winfo_height())
+
 
 def main() -> None:
     global single

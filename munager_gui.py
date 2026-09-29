@@ -19,6 +19,7 @@ except Exception:
 import munager_net
 
 CtrlEvent = Callable[["Ctrl"], Any]
+WinEvent = Callable[["Munager"], Any]
 
 
 class Ctrl:
@@ -131,7 +132,7 @@ class Ctrl:
 
     def set_cell(self, row: int, col: int, text: Any) -> None:
         raise TypeError("set_cell is only valid on a ListView control")
-    
+
     def insert_full(self, pos: int, values: list[Any]) -> None:
         raise TypeError("insert_full is only valid on a ListView control")
 
@@ -145,10 +146,6 @@ class Ctrl:
             val = self.var.get()
             return (self._items.index(val) + 1) if val in self._items else 0
         return 0
-
-    def on_change(self, cb: Callable[[], Any]) -> None:
-        # DDL/combobox selection change
-        self.widget.bind("<<ComboboxSelected>>", lambda e: cb())
 
     def fit_columns(self) -> None:
         raise TypeError("fit_columns is only valid on a ListView control")
@@ -254,7 +251,6 @@ class Munager:
         # make combobox dropdown list use the same font size
         self.win.option_add("*TCombobox*Listbox.font",
                             ("TkDefaultFont", font))
-        self._ctrls: dict[str, Ctrl] = {}
         self._followers: list["Munager"] = []
         self._close_cb: Optional[Callable[[], Any]] = close
         self.other: Optional["Munager"] = None
@@ -402,32 +398,32 @@ class Munager:
         self.link_scroll(display)
 
     # --- hybrid global hotkeys (window binding + optional pynput global) ---
-    def bind_key(self, sequence: str, handler: Callable[[], Any],
+    def bind_key(self, sequence: str, handler: WinEvent,
                  global_key: Optional[str] = None) -> None:
         """Bind a keyboard shortcut in-window, and globally if pynput allows.
 
         sequence   : Tk binding, e.g. '<Control-l>'
         global_key : pynput hotkey string, e.g. '<ctrl>+l' (optional)
         """
-        self.win.bind_all(sequence, lambda e: handler(), add="+")
+        self.win.bind_all(sequence, lambda e: handler(self), add="+")
         if _pk is not None and global_key:
             self._start_global_hotkey(global_key, handler)
 
-    def bind_mouse(self, button: str, handler: Callable[[], Any]) -> None:
+    def bind_mouse(self, button: str, handler: WinEvent) -> None:
         """Bind a mouse button in-window, and globally if pynput allows.
 
         button : 'middle' or 'right'
         """
         seq = {"middle": "<Button-2>", "right": "<Button-3>"}.get(button)
         if seq:
-            self.win.bind_all(seq, lambda e: handler(), add="+")
+            self.win.bind_all(seq, lambda e: handler(self), add="+")
         if _pm is not None:
             self._start_global_mouse(button, handler)
 
     def _start_global_hotkey(self, combo: str,
-                             handler: Callable[[], Any]) -> None:
+                             handler: WinEvent) -> None:
         def on_activate() -> None:
-            self.win.after(0, handler)
+            self.win.after(0, lambda: handler(self))
         try:
             assert _pk is not None
             gh = _pk.GlobalHotKeys({combo: on_activate})
@@ -438,14 +434,14 @@ class Munager:
             pass  # Accessibility not granted / unsupported: in-window still works
 
     def _start_global_mouse(self, button: str,
-                            handler: Callable[[], Any]) -> None:
+                            handler: WinEvent) -> None:
         assert _pm is not None
         want = {"middle": _pm.Button.middle,
                 "right": _pm.Button.right}.get(button)
 
         def on_click(x: int, y: int, b: Any, pressed: bool) -> None:
             if pressed and b == want:
-                self.win.after(0, handler)
+                self.win.after(0, lambda: handler(self))
 
         try:
             ml = _pm.Listener(on_click=on_click)
@@ -455,42 +451,20 @@ class Munager:
         except Exception:
             pass
 
-    def __getitem__(self, name: str) -> Ctrl:
-        return self._ctrls[name]
-
-    def _register(self, name: Optional[str], ctrl: Ctrl) -> Ctrl:
-        if name:
-            self._ctrls[name] = ctrl
-        return ctrl
-
-    @staticmethod
-    def _vname(options: str) -> Optional[str]:
-        for tok in options.split():
-            if tok.startswith("v") and len(tok) > 1:
-                return tok[1:]
-        return None
-
-    # --- Add* helpers (AHK-compatible signatures) ---
-    def AddText(self, options: str = "", text: Any = "",
-                event: Optional[CtrlEvent] = None) -> Ctrl:
-        name = self._vname(options)
-        wraplength = 0
-        for tok in options.split():
-            if tok.startswith("w") and tok[1:].isdigit():
-                wraplength = int(tok[1:])
+    # --- Add* helpers (keyword-argument API) ---
+    def AddText(self, text: Any = "", *,
+                width: int = 0, clamp2: bool = False) -> Ctrl:
         lbl = tk.Label(self.body, text=str(text), font=self._font(),
                        justify="left", anchor="w")
-        if wraplength:
-            lbl.config(wraplength=wraplength)
-        if "wrap2" in options:
-            # clamp height to 2 lines
+        if width:
+            lbl.config(wraplength=width)
+        if clamp2:
             lbl.config(height=2)
         lbl.pack(fill="x", padx=4, pady=2)
-        return self._register(name, Ctrl(lbl, "text"))
+        return Ctrl(lbl, "text")
 
-    def AddButton(self, options: str = "", text: Any = "",
+    def AddButton(self, text: Any = "", *,
                   event: Optional[CtrlEvent] = None) -> Ctrl:
-        name = self._vname(options)
         cmd: str | Callable[[], Any] = (lambda: event(c)) if event else ""
         btn = tk.Button(self.body, text=str(text), font=self._font(),
                         command=cmd)
@@ -498,7 +472,7 @@ class Munager:
         c = Ctrl(btn, "button")
         if event:
             c._event = event
-        return self._register(name, c)
+        return c
 
     def AddRow(self) -> "Row":
         """A horizontal container; add controls into it side-by-side."""
@@ -506,34 +480,31 @@ class Munager:
         frame.pack(fill="x", padx=4, pady=1)
         return Row(self, frame)
 
-    def AddEdit(self, options: str = "", text: Any = "",
-                event: Optional[CtrlEvent] = None) -> Ctrl:
-        name = self._vname(options)
-        rows = 1
-        for tok in options.split():
-            if tok.startswith("r") and tok[1:].isdigit():
-                rows = int(tok[1:])
-        disabled = "Disabled" in options
+    def AddEdit(self, text: Any = "", *, rows: int = 1, width: int = 0,
+                disabled: bool = False,
+                select_on_focus: bool = False) -> Ctrl:
         txt = tk.Text(self.body, height=rows, font=self._font())
+        if width:
+            txt.configure(width=width)
         if text:
             txt.insert("1.0", str(text))
         if disabled:
             txt.config(state="disabled")
-        txt.pack(fill="x", padx=4, pady=2)
-        return self._register(name, Ctrl(txt, "edit"))
 
-    def AddUpDown(self, options: str = "", text: Any = 0,
+        if select_on_focus:
+            def _sel(_e: "Optional[tk.Event[Any]]" = None) -> None:
+                txt.tag_add("sel", "1.0", "end-1c")
+                txt.mark_set("insert", "end-1c")
+            txt.bind("<FocusIn>", lambda e: txt.after(1, _sel))
+            txt.bind("<Button-1>", lambda e: txt.after(1, _sel))
+
+        txt.pack(fill="x", padx=4, pady=2)
+        return Ctrl(txt, "edit")
+
+    def AddUpDown(self, value: Any = 0, *,
+                  lo: int = 1, hi: int = 5, disabled: bool = False,
                   event: Optional[CtrlEvent] = None) -> Ctrl:
-        name = self._vname(options)
-        lo, hi = 1, 5
-        for tok in options.split():
-            if tok.startswith("Range"):
-                try:
-                    lo, hi = (int(x) for x in tok[5:].split("-"))
-                except ValueError:
-                    pass
-        disabled = "Disabled" in options
-        var = tk.StringVar(value=str(text or lo))
+        var = tk.StringVar(value=str(value or lo))
         sp = tk.Spinbox(self.body, from_=lo, to=hi, textvariable=var,
                         font=self._font(), width=5)
         if disabled:
@@ -542,41 +513,177 @@ class Munager:
         c = Ctrl(sp, "spin", var)
         if event:
             var.trace_add("write", lambda *_: event(c))
-        return self._register(name, c)
+        return c
 
-    def AddDDL(self, options: str = "",
-               items: Optional[Iterable[Any]] = None,
+    def AddDDL(self, items: Optional[Iterable[Any]] = None, *,
+               width: int = 0, sort: bool = False, search: bool = True,
                event: Optional[CtrlEvent] = None) -> Ctrl:
         item_list: list[Any] = list(items or [])
-        if "sort" in options:
+        if sort:
             item_list = sorted(item_list)
-        name = self._vname(options)
         var = tk.StringVar()
-        style = ttk.Style()
-        style_name = f"F{self.font_size}.TCombobox"
-        style.configure(style_name, font=("TkDefaultFont", self.font_size))
-        cb = ttk.Combobox(self.body, textvariable=var, values=item_list,
-                          state="readonly", font=self._font(),
-                          style=style_name)
-        cb.pack(fill="x", padx=4, pady=2)
-        c = Ctrl(cb, "ddl", var)
-        c._items = item_list
-        if event:
-            cb.bind("<<ComboboxSelected>>", lambda e: event(c))
-        return self._register(name, c)
 
-    def AddListBox(self, options: str = "",
-                   items: Optional[Iterable[Any]] = None,
+        if not search:
+            style = ttk.Style()
+            style_name = f"F{self.font_size}.TCombobox"
+            style.configure(style_name,
+                            font=("TkDefaultFont", self.font_size))
+            cb = ttk.Combobox(self.body, textvariable=var, values=item_list,
+                              state="readonly", font=self._font(),
+                              style=style_name)
+            cb.pack(fill="x", padx=4, pady=2)
+            c = Ctrl(cb, "ddl", var)
+            c._items = item_list
+            if event:
+                cb.bind("<<ComboboxSelected>>",
+                        lambda e: event(c))
+            return c
+
+        # --- custom searchable dropdown (entry + floating listbox) ---
+        wrap = tk.Frame(self.body)
+        wrap.pack(fill="x", padx=4, pady=2, anchor="w")
+
+        entry = tk.Entry(wrap, textvariable=var, font=self._font())
+        if width:
+            wrap.pack_propagate(False)
+            entry.pack(fill="both", expand=True)
+            wrap.update_idletasks()
+            wrap.configure(width=width, height=entry.winfo_reqheight())
+        else:
+            entry.pack(fill="x", expand=True)
+
+        # popup listbox lives in a borderless Toplevel so it can overlay
+        pop = tk.Toplevel(self.win)
+        pop.withdraw()
+        pop.overrideredirect(True)
+        pop.transient(self.win)
+        lb = tk.Listbox(pop, font=self._font(), exportselection=False,
+                        activestyle="dotbox", height=8)
+        lb.pack(fill="both", expand=True)
+
+        c = Ctrl(entry, "ddl", var)
+        c._items = item_list
+
+        state = {"open": False, "matches": list(item_list), "last": None}
+
+        def place_pop() -> None:
+            entry.update_idletasks()
+            x = entry.winfo_rootx()
+            y = entry.winfo_rooty() + entry.winfo_height()
+            w = entry.winfo_width()
+            n = min(len(state["matches"]), 8)
+            lb.configure(height=max(n, 1))
+            pop.update_idletasks()
+            h = lb.winfo_reqheight()
+            pop.geometry(f"{w}x{h}+{x}+{y}")
+
+        def fill(matches: list[Any], keep_sel: bool = False) -> None:
+            state["matches"] = matches
+            prev = lb.curselection()
+            lb.delete(0, "end")
+            for m in matches:
+                lb.insert("end", m)
+            if matches:
+                idx = (prev[0] if keep_sel and prev else 0)
+                idx = max(0, min(len(matches) - 1, idx))
+                lb.selection_clear(0, "end")
+                lb.selection_set(idx)
+                lb.activate(idx)
+
+        def open_pop() -> None:
+            if not state["matches"]:
+                close_pop()
+                return
+            place_pop()
+            pop.deiconify()
+            pop.lift()
+            state["open"] = True
+            entry.focus_set()
+
+        def close_pop() -> None:
+            pop.withdraw()
+            state["open"] = False
+
+        def refilter(_e: "Optional[tk.Event[Any]]" = None) -> None:
+            typed = var.get().lower()
+            if typed == state["last"]:      # text unchanged -> don't reset sel
+                open_pop()
+                return
+            state["last"] = typed
+            matches = [it for it in item_list
+                       if typed in str(it).lower()]
+            fill(matches)                   # text changed -> reset to top
+            open_pop()
+
+        def commit(value: Any) -> None:
+            var.set(value)
+            state["last"] = str(value).lower()
+            entry.icursor("end")
+            close_pop()
+            if event:
+                event(c)
+
+        def on_key(e: "tk.Event[Any]") -> Optional[str]:
+            if e.keysym in ("Up", "Down"):
+                if not state["open"]:
+                    refilter()
+                    return "break"
+                cur = lb.curselection()
+                i = cur[0] if cur else 0
+                i += 1 if e.keysym == "Down" else -1
+                i = max(0, min(len(state["matches"]) - 1, i))
+                lb.selection_clear(0, "end")
+                lb.selection_set(i)
+                lb.activate(i)
+                lb.see(i)
+                return "break"
+            if e.keysym in ("Return", "KP_Enter"):
+                if state["open"] and state["matches"]:
+                    cur = lb.curselection()
+                    commit(state["matches"][cur[0] if cur else 0])
+                return "break"
+            if e.keysym == "Escape":
+                close_pop()
+                return "break"
+            return None
+
+        def on_key_release(e: "tk.Event[Any]") -> None:
+            # ignore navigation/commit keys so they don't reset the selection
+            if e.keysym in ("Up", "Down", "Return", "KP_Enter",
+                            "Escape", "Left", "Right", "Home", "End",
+                            "Shift_L", "Shift_R", "Control_L", "Control_R"):
+                return
+            refilter()
+
+        def select_all(_e: "Optional[tk.Event[Any]]" = None) -> None:
+            entry.select_range(0, "end")
+            entry.icursor("end")
+
+        def on_click_item(_e: "tk.Event[Any]") -> None:
+            sel = lb.curselection()
+            if sel:
+                commit(state["matches"][sel[0]])
+
+        entry.bind("<KeyRelease>", on_key_release)
+        entry.bind("<KeyPress>", on_key)
+        entry.bind("<FocusIn>", lambda e: (select_all(), refilter()))
+        entry.bind("<Button-1>", lambda e: entry.after(1, select_all))
+        entry.bind("<FocusOut>", lambda e: entry.after(120, close_pop))
+        lb.bind("<ButtonRelease-1>", on_click_item)
+        lb.bind("<Motion>", lambda e: (lb.selection_clear(0, "end"),
+                                       lb.selection_set(lb.nearest(e.y))))
+
+        self.win.bind("<Configure>",
+                      lambda e: state["open"] and place_pop(), add="+")
+
+        fill(item_list)
+        return c
+
+    def AddListBox(self, items: Optional[Iterable[Any]] = None, *,
+                   rows: int = 3,
+                   choose: int = 1,
                    event: Optional[CtrlEvent] = None) -> Ctrl:
         item_list: list[Any] = list(items or [])
-        name = self._vname(options)
-        rows = 3
-        choose = 1
-        for tok in options.split():
-            if tok.startswith("r") and tok[1:].isdigit():
-                rows = int(tok[1:])
-            if tok.startswith("Choose"):
-                choose = int(tok[6:])
         lb = tk.Listbox(self.body, height=rows, font=self._font(),
                         exportselection=False)
         for it in item_list:
@@ -599,24 +706,33 @@ class Munager:
         c = LBCtrl(lb, "listbox")
         if event:
             lb.bind("<<ListboxSelect>>", lambda e: event(c))
-        return self._register(name, c)
+        return c
 
-    def AddListView(self, options: str = "",
-                    header: Optional[Sequence[str]] = None,
-                    rows: Optional[Sequence[Sequence[Any]]] = None,
+    def AddListView(self, header: Optional[Sequence[str]] = None,
+                    rows: Optional[Sequence[Sequence[Any]]] = None, *,
+                    col_widths: Optional[Sequence[int]] = None,
                     event: Optional[CtrlEvent] = None) -> Ctrl:
         header_list: list[str] = list(header or [])
         row_list: list[Sequence[Any]] = list(rows or [])
-        name = self._vname(options)
         cols = [f"c{i}" for i in range(len(header_list))]
-        tv = ttk.Treeview(self.body, columns=cols, show="headings",
+
+        tv = ttk.Treeview(self.body,
+                          columns=cols, show="headings",
                           height=min(20, max(3, len(row_list))))
+        tv.pack(fill="both", expand=True, padx=4, pady=2)
+
+        # per-column width: explicit override, else share total, else default
+        default_w = 120
         for i, h in enumerate(header_list):
+            cw = (col_widths[i] if col_widths and i < len(col_widths)
+                  else default_w)
             tv.heading(cols[i], text=h)
-            tv.column(cols[i], width=120, stretch=True)
+            tv.column(cols[i], width=cw, stretch=True)
+
         for r in row_list:
             vals = r[1:] if len(r) == len(header_list) + 1 else r
             tv.insert("", "end", values=list(vals))
+
         tv.pack(fill="both", expand=True, padx=4, pady=2)
 
         header_len = len(header_list)
@@ -639,19 +755,16 @@ class Munager:
                 return len(tv.get_children())
 
             def insert_row(self, pos: int, text: Any) -> None:
-                """1-based insert; pos beyond end appends (AHK 2147483647)."""
                 children = tv.get_children()
                 index = min(max(pos - 1, 0), len(children))
                 tv.insert("", index, values=[text])
 
             def delete_row(self, pos: int) -> None:
-                """1-based delete."""
                 children = tv.get_children()
                 if 1 <= pos <= len(children):
                     tv.delete(children[pos - 1])
 
             def get_text(self, row: int, col: int = 1) -> str:
-                """1-based row/col text."""
                 children = tv.get_children()
                 if 1 <= row <= len(children):
                     vals = tv.item(children[row - 1], "values")
@@ -694,31 +807,18 @@ class Munager:
         c = LVCtrl(tv, "listview")
         if event:
             tv.bind("<Double-1>", lambda e: event(c))
-        return self._register(name, c)
+        return c
 
-    def AddProgress(self, options: str = "", value: int = 0) -> Ctrl:
-        name = self._vname(options)
-        width, height = 400, 40
-        range_max = 100.0
-        for tok in options.split():
-            if tok.startswith("w") and tok[1:].isdigit():
-                width = int(tok[1:])
-            elif tok.startswith("h") and tok[1:].isdigit():
-                height = int(tok[1:])
-            elif tok.startswith("Range0-"):
-                try:
-                    range_max = float(tok[7:])
-                except ValueError:
-                    pass
+    def AddProgress(self, value: int = 0, *, width: int = 400, height: int = 40,
+                    range_max: float = 100.0, color: Optional[str] = None) -> Ctrl:
         pb = ProgressBar(self.body, width, height, range_max)
         pb.canvas.pack(fill="x", padx=4, pady=4)
         pb.set_value(value)
         c = Ctrl(pb.canvas, "progress")
         c._progress = pb
-        for tok in options.split():
-            if tok.startswith("c"):
-                pb.set_color(tok)
-        return self._register(name, c)
+        if color:
+            pb.set_color(color)
+        return c
 
 
 def mainloop() -> None:

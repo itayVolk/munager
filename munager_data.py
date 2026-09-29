@@ -8,6 +8,7 @@ import statistics
 import subprocess
 from typing import Any, Optional
 
+
 def _config_home() -> str:
     """A stable, writable per-user folder that survives runs (all OSes)."""
     if sys.platform == "win32":
@@ -24,12 +25,14 @@ def _config_home() -> str:
     except OSError:
         return os.path.dirname(os.path.abspath(sys.argv[0]))
 
+
 # Bootstrap ini in a STABLE per-user folder (PyInstaller/one-file safe).
 BOOTSTRAP_INI = os.path.join(_config_home(), "munager_boot.ini")
 BOOT_SECTION = "boot"
 
 # The real settings ini lives INSIDE the working directory.
 SECTION = "settings"
+
 
 def _boot_config() -> configparser.ConfigParser:
     cp = configparser.ConfigParser()
@@ -55,6 +58,7 @@ def _set_dir(d: str) -> None:
 def _ini_path() -> str:
     d = _get_dir()
     return os.path.join(d, "munager.ini") if d else BOOTSTRAP_INI
+
 
 # Shared model, mirroring the AHK global `countries` map.
 countries: dict[str, "Country"] = {}
@@ -419,6 +423,7 @@ def choose_dir() -> Optional[str]:
     _set_dir(d)          # remembered in the bootstrap ini
     load()
     return d
+
 
 def has_data() -> bool:
     """True if a persisted model already exists for the current mode/dir."""

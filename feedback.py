@@ -82,7 +82,6 @@ def _on_server_data(raw: bytes) -> None:
 # ---- speech feedback (single edit) ------------------------------------------
 
 def mod(country: str, ask_mode: int = 0) -> None:
-    global select
     assert select is not None
     sel = select
 
@@ -112,11 +111,10 @@ def mod(country: str, ask_mode: int = 0) -> None:
 
 # ---- full feedback editor ---------------------------------------------------
 
-def show_feedback() -> None:
-    global select
+def show_feedback(del_ctrl: Ctrl) -> None:
     assert select is not None
     sel = select
-    name = sel["del"].Text
+    name = del_ctrl.Text
     if name == "":
         messagebox.showerror("munager", "Please select a country first")
         sel.show()
@@ -132,7 +130,6 @@ def show_feedback() -> None:
 
 # ---- awards (combined own + _feed) ------------------------------------------
 def awards() -> None:
-    global select
     assert select is not None
     sel = select
     sel.Hide()
@@ -147,22 +144,20 @@ def awards() -> None:
 # ---- main selector ----------------------------------------------------------
 
 def primary() -> None:
-    global select, ask
+    global select
     select = Munager("Feedback selector", font=30,
                      close=lambda: Munager.root().destroy())
     sel = select
 
-    sel.AddDDL("w500 sort vdel", sorted_present())
-    sel.AddButton("wp", "Speech", lambda e: mod(sel["del"].Text, 2))
-    sel.AddButton("wp", "Show feedback", lambda e: show_feedback())
-    sel.AddButton("wp", "Awards", lambda e: awards())
-    sel.AddButton("wp", "UNMOD feedback", lambda e: enter_unmod())
+    sel.AddDDL(sorted_present(), width=500, sort=True)
+    sel.AddButton("Speech", event=lambda e: mod(e.Text, 2))
+    sel.AddButton("Show feedback", event=show_feedback)
+    sel.AddButton("Awards", event=lambda e: awards())
+    sel.AddButton("UNMOD feedback", event=enter_unmod)
 
     if ip:
-        sel.AddText("wp", "Incoming speeches ")
-        lb = sel.AddListBox(
-            f"r3 wp Choose{ask + 1}",
-            ["are ignored", "prompt you", "take control"])
+        sel.AddText("Incoming speeches ")
+        lb = sel.AddListBox(["are ignored", "prompt you", "take control"], rows=3, choose=ask + 1)
 
         def on_mode(c: Ctrl) -> None:
             global ask
@@ -172,17 +167,16 @@ def primary() -> None:
 
         lb.widget.bind("<<ListboxSelect>>", lambda _e: on_mode(lb))
     else:
-        sel.AddButton("wp", "Save feedback", lambda e: data.save(sync=False))
-        sel.AddButton("wp", "Sync (git pull/merge)",
-                      lambda e: (data.load(), _reopen()))
+        sel.AddButton("Save feedback", event=lambda e: data.save(sync=False))
+        sel.AddButton("Sync (git pull/merge)", event=lambda e: (data.load(), _reopen()))
 
     sel.show()
 
-def enter_unmod() -> None:
-    global select
+
+def enter_unmod(del_ctrl: Ctrl) -> None:
     assert select is not None
     sel = select
-    name = sel["del"].Text
+    name = del_ctrl.Text
     if name == "":
         messagebox.showerror("munager", "Please select a country first")
         return
@@ -209,6 +203,7 @@ def _reopen() -> None:
         select.Destroy()
         select = None
     primary()
+
 
 def main() -> None:
     global ip, client

@@ -67,8 +67,8 @@ class LengthSocket:
                         buf = buf[want:]
                         want = 4
                         state = "length"
-                        for l in list(self._listeners):
-                            _later(lambda l=l, m=msg: l(m))
+                        for listener in list(self._listeners):
+                            _later(lambda fn=listener, msg=msg: fn(msg))
         except OSError:
             pass
         finally:
@@ -131,7 +131,10 @@ def all_ipv4():
     try:
         host = socket.gethostname()
         for info in socket.getaddrinfo(host, None, socket.AF_INET):
-            addrs.add(info[4][0])
+            addr = info[4][0]
+            if isinstance(addr, str):
+                addr = addr.strip()
+            addrs.add(addr)
     except OSError:
         pass
     # also the default-route address (existing behaviour)
