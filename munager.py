@@ -24,7 +24,7 @@ speakers_list: list[str] = []
 
 def format_second(s: int) -> str:
     s = int(s)
-    return f"{s // 60}:{s % 60:02d}"
+    return f"{s // 60}:{s % 66:02d}"
 
 
 def parse_time(s: str) -> int:
@@ -1171,21 +1171,23 @@ def rebuild_chair() -> None:
 
 # ---- startup ----------------------------------------------------------------
 
-def show_address(addr: str, after: Callable[[], None]) -> None:
+def show_address(addrs: list[str], after: Callable[[], None]) -> None:
     def done() -> None:
         win.Destroy()
         after()
 
     win = Munager("munager", font=20, close=done)
     win.AddText("Center", "Co-chairs connect to this IP:")
-    e = win.AddEdit("w220 r1 vaddr", addr)      # small, single-line
+    text = "\n".join(addrs) if addrs else "(no network address found)"
+    rows = max(len(addrs), 1)
+    e = win.AddEdit(f"w260 r{rows} vaddr", text)
     win.AddButton("Center", "OK", lambda ev: done())
     win.show()
     win.win.update_idletasks()
     txt = cast(tk.Text, e.widget)
     txt.tag_add("sel", "1.0", "end-1c")
     txt.focus_set()
-    win.win.minsize(260, win.win.winfo_height())
+    win.win.minsize(300, win.win.winfo_height())
 
 def main() -> None:
     global single
@@ -1213,7 +1215,7 @@ def main() -> None:
         net.Server(_on_connection).listen(8080, "0.0.0.0")
         root.protocol("WM_DELETE_WINDOW",
                       lambda: (data.save(sync=single), root.destroy()))
-        show_address(net.local_ip(), build_chair)   # IP only; menu after close
+        show_address(net.all_ipv4(), build_chair)   # hotspot IP included
         mainloop()
         return
     else:

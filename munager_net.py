@@ -123,3 +123,35 @@ def local_ip():
         return ip
     except OSError:
         return "127.0.0.1"
+
+
+def all_ipv4():
+    """All local IPv4 addresses, hotspot-range addresses first."""
+    addrs = set()
+    try:
+        host = socket.gethostname()
+        for info in socket.getaddrinfo(host, None, socket.AF_INET):
+            addrs.add(info[4][0])
+    except OSError:
+        pass
+    # also the default-route address (existing behaviour)
+    try:
+        addrs.add(local_ip())
+    except Exception:
+        pass
+    addrs.discard("127.0.0.1")
+
+    def rank(ip):
+        # Windows Mobile Hotspot uses 192.168.137.x; generic hotspots often
+        # 192.168.x / 10.x. Prefer 137 subnet, then private ranges.
+        if ip.startswith("192.168.137."):
+            return 0
+        if ip.startswith("192.168."):
+            return 1
+        if ip.startswith("10."):
+            return 2
+        if ip.startswith("172."):
+            return 3
+        return 4
+
+    return sorted(addrs, key=rank)
