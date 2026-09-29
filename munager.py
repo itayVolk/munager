@@ -5,7 +5,7 @@ import random
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 import tkinter.font as tkfont
-from typing import Callable, Optional, cast
+from typing import Any, Callable, Optional, cast
 
 import munager_data as data
 import munager_net as net
@@ -18,13 +18,15 @@ single: bool = True
 server_clients: list[net.LengthSocket] = []
 chair: Optional[Munager] = None
 speakers_list: list[str] = []
+quick: Optional[Munager] = None          # persistent quick-edit window
+list_caucus_active: bool = False         # a speakers-list caucus is running
 
 
 # ---- helpers ----------------------------------------------------------------
 
 def format_second(s: int) -> str:
     s = int(s)
-    return f"{s // 60}:{s % 66:02d}"
+    return f"{s // 60}:{s % 60:02d}"
 
 
 def parse_time(s: str) -> int:
@@ -213,6 +215,8 @@ def call() -> None:
     assert chair is not None
     ch = chair
     ch.Hide()
+    if quick is not None and quick.win.winfo_exists():
+        quick.Hide()                    # closed during roll call
 
     control = Munager("Roll call (control)", font=20,
                       close=lambda: (submit(), ch.show()))
@@ -291,6 +295,9 @@ def call() -> None:
         broadcast_presence()          # sync roll call to co-chairs
         control.Destroy()
         display.Destroy()
+        if quick is not None:
+            quick.show()                # reopen the companion panel
+        _refresh_quick()                # sync to new presences
         ch.show()
 
     control.AddButton("", "Submit", lambda e: submit())
@@ -342,6 +349,7 @@ def settings() -> None:
 
         def toggle_mode() -> None:
             data.settings_write("list", "" if use_list else "1")
+            _refresh_quick()          # update add-to-list availability live
             reopen()
 
         def toggle_tip() -> None:
@@ -645,6 +653,13 @@ class CaucusWindow:
                 self.queue = speakers_list          # persistent, chair-filled
         self.veto_only = veto_only
         self.idx = 0
+        # flag: a speakers-list caucus is live (blocks quick-edit list adds)
+        global list_caucus_active
+        self._is_list_caucus = (self.has_speakers and use_list
+                                and mode == "open")
+        if self._is_list_caucus:
+            list_caucus_active = True
+            _refresh_quick()
 
         # ---- display window ----
         self.display = Munager(f"{title} (display)", font=40, bold=1,
@@ -916,12 +931,14 @@ class CaucusWindow:
 
     # ---- teardown ------------------------------------------------------
     def _finish(self) -> None:
+        _clear_list_caucus(self)
         self.display.Destroy()
         self.control.Destroy()
         self.after()
 
     def _close(self) -> None:
         self._save_current_feedback()
+        _clear_list_caucus(self)
         self.display.Destroy()
         self.control.Destroy()
         self.after()
@@ -1137,6 +1154,148 @@ def motion() -> None:
     control.show()
     board.show(1)
 
+# ---- quick edit (presence / speakers list) ----------------------------------
+def _clear_list_caucus(cw: "CaucusWindow") -> None:
+    global list_caucus_active
+    if getattr(cw, "_is_list_caucus", False):
+        list_caucus_active = False
+        _refresh_quick()
+
+_quick_state: dict[str, Any] = {"sel": None}
+
+
+def _stat_label(state: str) -> str:
+    return {"": "Absent", "P": "Present",
+            "V": "Present & Voting"}.get(state, "Absent")
+
+
+def _power_label(c: data.Country) -> str:
+    return {"O": "Observer", "V": "Permanent member"}.get(c.type, "Normal")
+
+
+def _refresh_quick() -> None:
+    """Rebuild the quick-edit body if the window is open."""
+    if quick is not None and quick.win.winfo_exists():
+        _quick_build()
+
+
+def quick_hide() -> None:
+    """Hide the quick-edit panel (it can be reopened; menu is unaffected)."""
+    if quick is not None:
+        quick.Hide()
+
+
+def _quick_counts_text() -> str:
+    names = list(countries)
+    pres = sum(1 for n in names if countries[n].stat in ("P", "V"))
+    pno = sum(1 for n in names
+              if countries[n].stat in ("P", "V") and countries[n].type != "O")
+    reg = pres // 2 + 1
+    two_thirds = -(-2 * pres // 3)
+    vote_maj = pno // 2 + 1
+    return (f"Present: {pres}    Present (excl. observers): {pno}\n"
+            f"Regular majority: {reg}    2/3 majority: {two_thirds}    "
+            f"Voting majority: {vote_maj}")
+
+
+def _quick_build() -> None:
+    """(Re)draw the quick-edit contents based on the live setting/state."""
+    global quick
+    prev_sel = _quick_state.get("sel")
+
+    # recreate the window fresh (Munager has no Clear(); reusing a destroyed
+    # body raises 'bad window path name')
+    if quick is not None:
+        try:
+            quick.Destroy()
+        except Exception:
+            pass
+    quick = Munager("Quick edit", font=20, close=lambda: quick_hide())
+
+    use_list = bool(data.settings_read("list"))
+
+    summary = quick.AddText("w700 vsummary", _quick_counts_text())
+
+    quick.AddText("", "Country:")
+    ddl = quick.AddDDL("w320 sort vqdel", sorted_countries())
+
+    quick.AddText("w700 vpower", "Power: —")
+
+    prow = quick.AddRow()
+    b_abs = prow.button("Absent", lambda e: set_pres(""))
+    b_pre = prow.button("Present", lambda e: set_pres("P"))
+    b_vot = prow.button("Present & Voting", lambda e: set_pres("V"))
+
+    add_btn = quick.AddButton("vqadd", "Add to speakers list",
+                              lambda e: add_to_list())
+
+    win_local = quick
+
+    # ---- behaviour ----
+    def selected() -> Optional[str]:
+        name = ddl.Text
+        return name if name in countries else None
+
+    def refresh_selection() -> None:
+        name = selected()
+        _quick_state["sel"] = name
+        if name is None:
+            win_local["power"].Text = "Power: —"
+            for b in (b_abs, b_pre, b_vot):
+                b.widget["state"] = "disabled"
+                b.widget["relief"] = "raised"
+            add_btn.widget["state"] = "disabled"
+            summary.Text = _quick_counts_text()
+            return
+        c = countries[name]
+        win_local["power"].Text = f"Power: {_power_label(c)}"
+
+        b_abs.widget["state"] = "normal"
+        b_pre.widget["state"] = "normal"
+        b_vot.widget["state"] = "disabled" if c.type else "normal"
+        b_abs.widget["relief"] = "sunken" if c.stat == "" else "raised"
+        b_pre.widget["relief"] = "sunken" if c.stat == "P" else "raised"
+        b_vot.widget["relief"] = "sunken" if c.stat == "V" else "raised"
+
+        present = c.stat in ("P", "V")
+        can_add = use_list and present and not list_caucus_active
+        add_btn.widget["state"] = "normal" if can_add else "disabled"
+        summary.Text = _quick_counts_text()
+
+    def set_pres(state: str) -> None:
+        name = selected()
+        if name is None:
+            messagebox.showerror("munager", "Pick a country first.")
+            return
+        c = countries[name]
+        if state == "V" and c.type:
+            return                      # guarded by disabled button anyway
+        c.stat = state
+        data.save(sync=single)
+        broadcast_presence()
+        refresh_selection()
+
+    def add_to_list() -> None:
+        name = selected()
+        if name is None:
+            return
+        if not (bool(data.settings_read("list"))
+                and countries[name].stat in ("P", "V")
+                and not list_caucus_active):
+            return
+        speakers_list.append(name)
+
+    ddl.on_change(lambda c=ddl: refresh_selection())
+
+    # restore prior selection if still valid
+    if prev_sel and prev_sel in countries:
+        ddl.Text = prev_sel
+    refresh_selection()
+
+    quick.show()
+    quick.win.update_idletasks()
+    quick.win.minsize(600, quick.win.winfo_height())
+
 
 # ---- chair main menu --------------------------------------------------------
 
@@ -1165,6 +1324,11 @@ def rebuild_chair() -> None:
     if chair is not None:
         chair.Destroy()
     build_chair()
+    _refresh_quick()
+
+def _start_chair() -> None:
+    build_chair()
+    _quick_build()          # persistent companion, opens with the menu
 
 
 # ---- startup ----------------------------------------------------------------
@@ -1213,7 +1377,7 @@ def main() -> None:
         net.Server(_on_connection).listen(8080, "0.0.0.0")
         root.protocol("WM_DELETE_WINDOW",
                       lambda: (data.save(sync=single), root.destroy()))
-        show_address(net.all_ipv4(), build_chair)   # hotspot IP included
+        show_address(net.all_ipv4(), _start_chair)   # hotspot IP included
         mainloop()
         return
     else:
@@ -1227,7 +1391,7 @@ def main() -> None:
             data.import_table()
             data.save(sync=False)
 
-    build_chair()
+    _start_chair()
     root.protocol("WM_DELETE_WINDOW",
                   lambda: (data.save(sync=single), root.destroy()))
     mainloop()
