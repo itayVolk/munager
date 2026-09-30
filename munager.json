@@ -2,7 +2,7 @@
  {
   "name": "Bahrain",
   "power": "",
-  "presence": "P",
+  "presence": "",
   "unmod": [
    -1,
    ""
@@ -16,61 +16,38 @@
  },
  {
   "name": "China",
-  "power": "",
-  "presence": "P",
+  "power": "V",
+  "presence": "",
   "unmod": [
-   3,
-   "testing main window"
-  ],
-  "unmod_feed": [
-   3,
-   "testing main window"
-  ],
-  "mod": [
-   [
-    3,
-    "testing main"
-   ],
-   [
-    3,
-    "testing main"
-   ]
-  ],
-  "mod_feed": [
-   [
-    3,
-    "testing main"
-   ],
-   [
-    1,
-    "testing second"
-   ]
-  ]
- },
- {
-  "name": "Colombia",
-  "power": "",
-  "presence": "V",
-  "unmod": [
-   3,
-   "testing feedback"
+   -1,
+   ""
   ],
   "unmod_feed": [
    -1,
    ""
   ],
-  "mod": [
-   [
-    5,
-    "testing speeches"
-   ]
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Colombia",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
   ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
   "mod_feed": []
  },
  {
   "name": "Democratic Republic of the Congo",
   "power": "",
-  "presence": "P",
+  "presence": "",
   "unmod": [
    -1,
    ""
@@ -99,36 +76,18 @@
  },
  {
   "name": "France",
-  "power": "",
-  "presence": "P",
+  "power": "V",
+  "presence": "",
   "unmod": [
    -1,
-   "main feedback"
+   ""
   ],
   "unmod_feed": [
-   1,
-   "second feedback"
+   -1,
+   ""
   ],
-  "mod": [
-   [
-    3,
-    "feedback"
-   ],
-   [
-    3,
-    "testing main"
-   ]
-  ],
-  "mod_feed": [
-   [
-    3,
-    "feedback"
-   ],
-   [
-    3,
-    "testing main"
-   ]
-  ]
+  "mod": [],
+  "mod_feed": []
  },
  {
   "name": "Greece",
@@ -147,7 +106,7 @@
  },
  {
   "name": "Iran",
-  "power": "",
+  "power": "O",
   "presence": "",
   "unmod": [
    -1,
@@ -162,7 +121,7 @@
  },
  {
   "name": "Iraq",
-  "power": "",
+  "power": "O",
   "presence": "",
   "unmod": [
    -1,
@@ -237,7 +196,7 @@
  },
  {
   "name": "Russia",
-  "power": "",
+  "power": "V",
   "presence": "",
   "unmod": [
    -1,
@@ -267,7 +226,7 @@
  },
  {
   "name": "Syria",
-  "power": "",
+  "power": "O",
   "presence": "",
   "unmod": [
    -1,
@@ -282,7 +241,7 @@
  },
  {
   "name": "Turkey",
-  "power": "",
+  "power": "O",
   "presence": "",
   "unmod": [
    -1,
@@ -297,7 +256,7 @@
  },
  {
   "name": "United Kingdom",
-  "power": "",
+  "power": "V",
   "presence": "",
   "unmod": [
    -1,
@@ -312,7 +271,7 @@
  },
  {
   "name": "United States",
-  "power": "",
+  "power": "V",
   "presence": "",
   "unmod": [
    -1,
