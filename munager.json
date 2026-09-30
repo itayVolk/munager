@@ -1,0 +1,328 @@
+[
+ {
+  "name": "Bahrain",
+  "power": "",
+  "presence": "P",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "China",
+  "power": "",
+  "presence": "P",
+  "unmod": [
+   3,
+   "testing main window"
+  ],
+  "unmod_feed": [
+   3,
+   "testing main window"
+  ],
+  "mod": [
+   [
+    3,
+    "testing main"
+   ],
+   [
+    3,
+    "testing main"
+   ]
+  ],
+  "mod_feed": [
+   [
+    3,
+    "testing main"
+   ],
+   [
+    1,
+    "testing second"
+   ]
+  ]
+ },
+ {
+  "name": "Colombia",
+  "power": "",
+  "presence": "V",
+  "unmod": [
+   3,
+   "testing feedback"
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [
+   [
+    5,
+    "testing speeches"
+   ]
+  ],
+  "mod_feed": []
+ },
+ {
+  "name": "Democratic Republic of the Congo",
+  "power": "",
+  "presence": "P",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Denmark",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "France",
+  "power": "",
+  "presence": "P",
+  "unmod": [
+   -1,
+   "main feedback"
+  ],
+  "unmod_feed": [
+   1,
+   "second feedback"
+  ],
+  "mod": [
+   [
+    3,
+    "feedback"
+   ],
+   [
+    3,
+    "testing main"
+   ]
+  ],
+  "mod_feed": [
+   [
+    3,
+    "feedback"
+   ],
+   [
+    3,
+    "testing main"
+   ]
+  ]
+ },
+ {
+  "name": "Greece",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Iran",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Iraq",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Latvia",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Liberia",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Pakistan",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Panama",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Russia",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Somalia",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Syria",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "Turkey",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "United Kingdom",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ },
+ {
+  "name": "United States",
+  "power": "",
+  "presence": "",
+  "unmod": [
+   -1,
+   ""
+  ],
+  "unmod_feed": [
+   -1,
+   ""
+  ],
+  "mod": [],
+  "mod_feed": []
+ }
+]

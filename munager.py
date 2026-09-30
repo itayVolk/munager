@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-import json
 import random
 import tkinter as tk
 from tkinter import messagebox, simpledialog
 import tkinter.font as tkfont
 from typing import Any, Callable, Optional
 
+from munager_proto import (CountryDelta, Feedback, FullState, Hello, Power, Presence, PresenceDTO,
+                           PresenceSync, SpeechStart, decode, encode)
 import munager_data as data
 import munager_net as net
 from munager_data import countries
 from munager_gui import Ctrl, Munager, mainloop
-from munager_feedback_ui import speech_feedback, awards_window, feedback_viewer
+from munager_feedback_ui import awards_window, feedback_viewer
 
 # ---- globals ----------------------------------------------------------------
-single: bool = True
 server_clients: list[net.LengthSocket] = []
 chair: Optional[Munager] = None
 speakers_list: list[str] = []
@@ -90,68 +90,51 @@ def sorted_countries() -> list[str]:
 
 
 def present_countries() -> list[str]:
-    return sorted(n for n, c in countries.items() if c.stat)
-
-
-def _resume_chair() -> None:
-    if chair is not None:
-        chair.show()
+    return sorted(n for n, c in countries.items() if c.presence)
 
 
 # ---- networking -------------------------------------------------------------
-
 def broadcast(country: str) -> None:
     c = countries.get(country)
-    if not c:
+    if c is None:
         return
-    payload = json.dumps({
-        "country": country,
-        "unmod": c.unmod, "mod": c.mod,
-        "unmod_feed": c.unmod_feed, "mod_feed": c.mod_feed,
-    })
+    payload = encode(CountryDelta(c))
     for cli in list(server_clients):
         cli.write(payload)
 
 
 def write(text: str) -> None:
-    """Send a raw feedback message to all connected co-chairs (no-op if single)."""
-    if single:
-        return
+    """Send a raw feedback message to all connected co-chairs."""
     for cli in list(server_clients):
-        cli.write(text)
+        cli.write(encode(SpeechStart(text)))
+
+
+def full_state() -> FullState:
+    """The entire model as a wire message (initial co-chair sync)."""
+    return FullState(list(countries.values()))
 
 
 def _on_client_data(cli: net.LengthSocket, raw: bytes) -> None:
-    text = raw.decode("utf-8")
-    if text == "start":
-        full = {name: {"unmod": c.unmod, "mod": c.mod,
-                       "unmod_feed": c.unmod_feed, "mod_feed": c.mod_feed,
-                       "stat": c.stat, "type": c.type}
-                for name, c in countries.items()}
-        cli.write(json.dumps(full))
-        return
-    try:
-        msg = json.loads(text)
-    except ValueError:
-        return
-    country = msg.get("country", "")
-    c = countries.get(country)
-    if not c:
-        c = data.Country(country)
-        countries[country] = c
-    c.unmod_feed = msg.get("unmod", c.unmod_feed)
-    c.mod_feed = list(msg.get("mod", c.mod_feed))
-    data.save(sync=single)     # networked: co-chair feedback merged into main csv
+    msg = decode(raw)
+    if isinstance(msg, Hello):
+        cli.write(encode(full_state()))
+    elif isinstance(msg, CountryDelta):
+        d = msg.country
+        c = countries.get(d.name)
+        if c is None:
+            c = data.Country(d.name)
+            countries[d.name] = c
+        # co-chair's own feedback (its unmod/mod) lands in the *_feed slots
+        c.unmod_feed = d.unmod
+        c.mod_feed = list(d.mod)
+        data.save()
+    # (primary ignores FullState/PresenceSync/SpeechStart echoes)
 
 
 def _on_connection(cli: net.LengthSocket) -> None:
     server_clients.append(cli)
     cli.on("data", lambda raw, cli=cli: _on_client_data(cli, raw))
-    full = {name: {"unmod": c.unmod, "mod": c.mod,
-                   "unmod_feed": c.unmod_feed, "mod_feed": c.mod_feed,
-                   "stat": c.stat, "type": c.type}
-            for name, c in countries.items()}
-    cli.write(json.dumps(full))
+    cli.write(encode(full_state()))
 
 
 # ---- feedback display -------------------------------------------------------
@@ -179,8 +162,8 @@ def feedback() -> None:
 
     select = Munager("Feedback selector", font=30, bold=1,
                      close=lambda: (select.Destroy(), ch.show()))
-    select.AddDDL(sorted_countries(), width=500, sort=True)
-    select.AddButton("Select", event=chosen)
+    country = select.AddDDL(sorted_countries(), width=500, sort=True)
+    select.AddButton("Select", event=lambda e: chosen(country))
     select.show()
 
 
@@ -199,13 +182,10 @@ def awards() -> None:
 
 # ---- roll call --------------------------------------------------------------
 def broadcast_presence() -> None:
-    """Push every country's presence/type to co-chairs (roll-call sync)."""
-    if single:
-        return
-    payload = json.dumps({
-        "presence": {name: {"stat": c.stat, "type": c.type}
-                     for name, c in countries.items()}
-    })
+    """Push every country's presence/power to co-chairs (roll-call sync)."""
+    payload = encode(PresenceSync(
+        [PresenceDTO(name, c.presence, c.power)
+         for name, c in countries.items()]))
     for cli in list(server_clients):
         cli.write(payload)
 
@@ -225,19 +205,12 @@ def call() -> None:
     order = sorted_countries()
     rows: dict[str, dict[str, Ctrl]] = {}
 
-    def status_label(state: str) -> str:
-        return {"": "Absent", "P": "Present",
-                "V": "Present & Voting", "O": "Observer"}.get(state, "Absent")
-
-    def type_label(c: data.Country) -> str:
-        return {"O": "Observer", "V": "Permanent"}.get(c.type, "")
-
     def counts() -> dict[str, int]:
-        present = sum(1 for n in order if countries[n].stat in ("P", "V"))
-        voting = sum(1 for n in order if countries[n].stat == "V")
+        present = sum(1 for n in order if countries[n].presence)
+        voting = sum(1 for n in order if countries[n].presence == Presence.PRESENT_VOTING)
         present_nonobs = sum(1 for n in order
-                             if countries[n].stat in ("P", "V")
-                             and countries[n].type != "O")
+                             if countries[n].presence
+                             and countries[n].power != Power.OBSERVER)
         return {"present": present, "voting": voting,
                 "present_nonobs": present_nonobs}
 
@@ -258,19 +231,19 @@ def call() -> None:
         c_summary.Text = summary_text()
         d_view.clear()
         for n in order:
-            tag = type_label(countries[n])
+            tag = str(countries[n].power)
             label = f"{n} ({tag})" if tag else n
             d_view.insert_full(d_view.count() + 1,
-                               [label, status_label(countries[n].stat)])
+                               [label, str(countries[n].presence)])
         d_view.set_height(len(order))
 
-    def set_state(name: str, state: str) -> None:
-        countries[name].stat = state
+    def set_state(name: str, state: Presence) -> None:
+        countries[name].presence = state
         r = rows[name]
-        r["abs"].widget["relief"] = "sunken" if state == "" else "raised"
-        r["pre"].widget["relief"] = "sunken" if state == "P" else "raised"
+        r["abs"].widget["relief"] = "sunken" if state else "raised"
+        r["pre"].widget["relief"] = "sunken" if state == Presence.PRESENT else "raised"
         if "vot" in r:
-            r["vot"].widget["relief"] = "sunken" if state == "V" else "raised"
+            r["vot"].widget["relief"] = "sunken" if state == Presence.PRESENT_VOTING else "raised"
         refresh_display()
 
     c_summary = control.AddText("", width=700)
@@ -278,19 +251,19 @@ def call() -> None:
     for name in order:
         c = countries[name]
         row = control.AddRow()
-        tag = type_label(c)
+        tag = str(c.power)
         row.label(f"{name}  ({tag})" if tag else name, width=24)
         rm: dict[str, Ctrl] = {}
-        rm["abs"] = row.button("Absent", lambda e, n=name: set_state(n, ""))
-        rm["pre"] = row.button("Present", lambda e, n=name: set_state(n, "P"))
+        rm["abs"] = row.button("Absent", lambda e, n=name: set_state(n, Presence.ABSENT))
+        rm["pre"] = row.button("Present", lambda e, n=name: set_state(n, Presence.PRESENT))
         # observers/permanent may not be "Present & Voting"
-        if not c.type:
+        if not c.power:
             rm["vot"] = row.button("Present & Voting",
-                                   lambda e, n=name: set_state(n, "V"))
+                                   lambda e, n=name: set_state(n, Presence.PRESENT_VOTING))
         rows[name] = rm
 
     def submit() -> None:
-        data.save(sync=single)
+        data.save()
         broadcast_presence()          # sync roll call to co-chairs
         control.Destroy()
         display.Destroy()
@@ -305,7 +278,7 @@ def call() -> None:
     d_view = display.AddListView(["Country", "Status"])
 
     for name in order:
-        set_state(name, countries[name].stat)
+        set_state(name, countries[name].presence)
 
     control.show()
     display.show(1)
@@ -327,7 +300,7 @@ def settings() -> None:
             build()
 
         def change_dir() -> None:
-            if data.choose_dir():
+            if data.choose_file():
                 reopen()
 
         def set_time() -> None:
@@ -356,7 +329,7 @@ def settings() -> None:
 
         # file
         r = view.AddRow()
-        r.label("Working folder: " + (data._dir() or "(none)"))
+        r.label("Save file: " + (data._get_file() or "(none)"))
         r.button("Change / choose", lambda e: change_dir())
         r.button("Add countries", lambda e: add_countries(view))
 
@@ -412,16 +385,16 @@ def add_countries(parent: Munager) -> None:
         if name_val in countries:
             messagebox.showerror("munager", f"{name_val} already exists.")
             return
-        ctype = {2: "V", 3: "O"}.get(type.Index, "")
+        ctype = {2: Power.VETO, 3: Power.OBSERVER}.get(type.Index, Power.NONE)
         c = data.Country(name_val)
-        c.type = ctype
-        c.stat = ""
+        c.power = ctype
+        c.presence = Presence.ABSENT
         countries[name_val] = c
         name.Text = ""
         messagebox.showinfo("munager", f"Added {name_val}.")
 
     def done() -> None:
-        data.save(sync=single)
+        data.save()
         entry.Destroy()
         parent.show()
 
@@ -442,25 +415,6 @@ def tip() -> None:
     data.settings_write("tip", "1")
 
 
-# ---- speech feedback entry --------------------------------------------------
-def enter_feedback(country: str, is_unmod: bool,
-                   after: Callable[[], None]) -> None:
-    c = countries[country]
-
-    def add_mod(entry: str) -> None:
-        if is_unmod:
-            c.unmod = entry
-        else:
-            c.mod.append(entry)
-
-    def on_saved() -> None:
-        broadcast(country)
-        data.save(sync=single)
-        after()
-
-    speech_feedback(country, lambda: c.unmod, add_mod, on_saved)
-
-
 # ---- voting -----------------------------------------------------------------
 def vote() -> None:
     assert chair is not None
@@ -471,7 +425,7 @@ def vote() -> None:
     veto_needed = int(veto_setting) if str(veto_setting).isdigit() else 0
 
     voters = [n for n in sorted_countries()
-              if countries[n].stat in ("P", "V") and countries[n].type != "O"]
+              if countries[n].presence and countries[n].power != Power.OBSERVER]
 
     state = {"i": 0, "yes": 0, "no": 0, "abstain": 0, "veto": 0}
     deferred: list[str] = []
@@ -495,7 +449,7 @@ def vote() -> None:
         return q[state["i"]] if state["i"] < len(q) else None
 
     def abstain_allowed(name: str) -> bool:
-        return countries[name].stat != "V"
+        return countries[name].presence != Presence.PRESENT_VOTING
 
     def update_total() -> None:
         total.Text = (f'For: {state["yes"]}   Against: {state["no"]}   '
@@ -533,8 +487,10 @@ def vote() -> None:
         name = current_name()
         if name is None:
             return
+        if kind == "abstain" and not abstain_allowed(name):
+            return
         state[kind] += 1
-        if kind == "no" and countries[name].type == "V":
+        if kind == "no" and countries[name].power == Power.VETO:
             state["veto"] += 1
         state["i"] += 1
         update_total()
@@ -640,7 +596,7 @@ class CaucusWindow:
             if not use_list:  # round robin auto-fills
                 pool = present_countries()
                 if veto_only:
-                    pool = [n for n in pool if countries[n].type == "V"]
+                    pool = [n for n in pool if countries[n].power == Power.VETO]
                 random.shuffle(pool)
                 self.queue = pool
             elif self.has_speakers:
@@ -684,7 +640,7 @@ class CaucusWindow:
             arow = self.control.AddRow()
             pool = present_countries()
             if self.veto_only:
-                pool = [n for n in pool if countries[n].type == "V"]
+                pool = [n for n in pool if countries[n].power == Power.VETO]
             self.add_ddl = self.control.AddDDL(pool, width=300, sort=True)
             arow.button("Add", lambda e: self._add_speaker())
             # full queue on the control screen with remove buttons
@@ -721,31 +677,21 @@ class CaucusWindow:
         self.control.show()
         self.display.show(1)
 
-    def _parse_score_note(self, entry: str) -> tuple[int, str]:
-        if entry and ":" in entry:
-            score, note = entry.split(":", 1)
-            try:
-                return int(score), note
-            except ValueError:
-                return 3, entry
-        return 3, entry or ""
-
     def _unmod_switch(self) -> None:
-        # save notes for the delegate we were editing
         prev = self._unmod_current
         if prev:
             note = self.fb_notes.Text.strip()
-            entry = f"{self.fb_score.Value}:{note}" if note else ""
-            countries[prev].unmod = entry
-            broadcast(prev)
-            data.save(sync=single)
-        # load the newly selected delegate's existing feedback
+            fb = Feedback(self.fb_score.Value, note)
+            if fb:                              # score>=1 AND note present
+                countries[prev].unmod = fb
+                broadcast(prev)
+                data.save()
         name = self.u_ddl.Text
         self._unmod_current = name or None
         if name:
-            score, note = self._parse_score_note(countries[name].unmod)
-            self.fb_score.Value = score
-            self.fb_notes.Text = note
+            cur = countries[name].unmod
+            self.fb_score.Value = cur.score if cur.score >= 1 else 3
+            self.fb_notes.Text = cur.note
         else:
             self.fb_score.Value = 3
             self.fb_notes.Text = ""
@@ -837,17 +783,17 @@ class CaucusWindow:
 
     def _save_current_feedback(self) -> None:
         note = self.fb_notes.Text.strip()
-        entry = f"{self.fb_score.Value}:{note}" if note else ""
+        entry = Feedback(score=self.fb_score.Value, note=note)
         if self.mode == "unmod":
             name = self.u_ddl.Text or self._unmod_current
-            if name:
+            if name and entry:                   # match mod-speech policy
                 countries[name].unmod = entry
                 self._unmod_current = name
                 broadcast(name)
         elif self.current and entry:
             countries[self.current].mod.append(entry)
             broadcast(self.current)
-        data.save(sync=single)      # chair feedback -> main csv
+        data.save()      # chair feedback -> main JSON
 
     def _next_speaker(self) -> None:
         self._save_current_feedback()
@@ -1154,15 +1100,6 @@ def _clear_list_caucus(cw: "CaucusWindow") -> None:
 _quick_state: dict[str, Any] = {"sel": None}
 
 
-def _stat_label(state: str) -> str:
-    return {"": "Absent", "P": "Present",
-            "V": "Present & Voting"}.get(state, "Absent")
-
-
-def _power_label(c: data.Country) -> str:
-    return {"O": "Observer", "V": "Permanent member"}.get(c.type, "Normal")
-
-
 def _refresh_quick() -> None:
     """Rebuild the quick-edit body if the window is open."""
     if quick is not None and quick.win.winfo_exists():
@@ -1177,9 +1114,9 @@ def quick_hide() -> None:
 
 def _quick_counts_text() -> str:
     names = list(countries)
-    pres = sum(1 for n in names if countries[n].stat in ("P", "V"))
+    pres = sum(1 for n in names if countries[n].presence)
     pno = sum(1 for n in names
-              if countries[n].stat in ("P", "V") and countries[n].type != "O")
+              if countries[n].presence and countries[n].power != Power.OBSERVER)
     reg = pres // 2 + 1
     two_thirds = -(-2 * pres // 3)
     vote_maj = pno // 2 + 1
@@ -1212,9 +1149,9 @@ def _quick_build() -> None:
     power = quick.AddText("Power: —", width=700)
 
     prow = quick.AddRow()
-    b_abs = prow.button("Absent", lambda e: set_pres(""))
-    b_pre = prow.button("Present", lambda e: set_pres("P"))
-    b_vot = prow.button("Present & Voting", lambda e: set_pres("V"))
+    b_abs = prow.button("Absent", lambda e: set_pres(Presence.ABSENT))
+    b_pre = prow.button("Present", lambda e: set_pres(Presence.PRESENT))
+    b_vot = prow.button("Present & Voting", lambda e: set_pres(Presence.PRESENT_VOTING))
 
     add_btn = quick.AddButton("Add to speakers list", event=lambda e: add_to_list())
 
@@ -1235,30 +1172,29 @@ def _quick_build() -> None:
             summary.Text = _quick_counts_text()
             return
         c = countries[name]
-        power.Text = f"Power: {_power_label(c)}"
+        power.Text = f"Power: {str(c.power)}"
 
         b_abs.widget["state"] = "normal"
         b_pre.widget["state"] = "normal"
-        b_vot.widget["state"] = "disabled" if c.type else "normal"
-        b_abs.widget["relief"] = "sunken" if c.stat == "" else "raised"
-        b_pre.widget["relief"] = "sunken" if c.stat == "P" else "raised"
-        b_vot.widget["relief"] = "sunken" if c.stat == "V" else "raised"
+        b_vot.widget["state"] = "disabled" if c.power else "normal"
+        b_abs.widget["relief"] = "sunken" if not c.presence else "raised"
+        b_pre.widget["relief"] = "sunken" if c.presence == Presence.PRESENT else "raised"
+        b_vot.widget["relief"] = "sunken" if c.presence == Presence.PRESENT_VOTING else "raised"
 
-        present = c.stat in ("P", "V")
-        can_add = use_list and present and not list_caucus_active
+        can_add = use_list and c.presence and not list_caucus_active
         add_btn.widget["state"] = "normal" if can_add else "disabled"
         summary.Text = _quick_counts_text()
 
-    def set_pres(state: str) -> None:
+    def set_pres(state: Presence) -> None:
         name = selected()
         if name is None:
             messagebox.showerror("munager", "Pick a country first.")
             return
         c = countries[name]
-        if state == "V" and c.type:
+        if state == Presence.PRESENT_VOTING and c.power:
             return                      # guarded by disabled button anyway
-        c.stat = state
-        data.save(sync=single)
+        c.presence = state
+        data.save()
         broadcast_presence()
         refresh_selection()
 
@@ -1267,7 +1203,7 @@ def _quick_build() -> None:
         if name is None:
             return
         if not (bool(data.settings_read("list"))
-                and countries[name].stat in ("P", "V")
+                and countries[name].presence
                 and not list_caucus_active):
             return
         speakers_list.append(name)
@@ -1280,6 +1216,12 @@ def _quick_build() -> None:
     quick.show()
     quick.win.update_idletasks()
     quick.win.minsize(600, quick.win.winfo_height())
+    # pin to the far left of the primary screen
+    h = quick.win.winfo_height()
+    w = quick.win.winfo_width()
+    sh = quick.win.winfo_screenheight()
+    y = (sh - h) // 2
+    quick.win.geometry(f"{w}x{h}+50+{y}")
 
 
 # ---- chair main menu --------------------------------------------------------
@@ -1293,9 +1235,6 @@ def build_chair() -> None:
     chair.AddButton("Vote", event=lambda e: vote())
     chair.AddButton("Feedback", event=lambda e: feedback())
     chair.AddButton("Awards", event=lambda e: awards())
-    if single:
-        chair.AddButton("Save", event=lambda e: data.save(sync=single))
-        chair.AddButton("Sync (git pull)", event=lambda e: (data.load(), rebuild_chair()))
     chair.AddButton("Settings", event=lambda e: settings())
     chair.show()
     chair.win.update_idletasks()
@@ -1334,7 +1273,6 @@ def show_address(addrs: list[str], after: Callable[[], None]) -> None:
 
 
 def main() -> None:
-    global single
     root = Munager.root()
 
     for fname in ("TkDefaultFont", "TkTextFont", "TkMenuFont",
@@ -1344,38 +1282,17 @@ def main() -> None:
         except Exception:
             pass
 
-    networked = messagebox.askyesno(
-        "munager", "Run networked (accept remote co-chairs)?")
-    if networked:
-        single = False
-        data.set_mode("online", primary=True)
-        if not data._dir():
-            data.choose_dir()
-        if data.has_data():             # munager.csv already exists -> resume
-            data.load()
-        else:                           # first run this conference
-            data.import_table()
-            data.save()
-        net.Server(_on_connection).listen(8080, "0.0.0.0")
-        root.protocol("WM_DELETE_WINDOW",
-                      lambda: (data.save(sync=single), root.destroy()))
-        show_address(net.all_ipv4(), _start_chair)   # hotspot IP included
-        mainloop()
-        return
-    else:
-        single = True
-        data.set_mode("offline", primary=True)
-        if not data._dir():
-            data.choose_dir()
-        if data.has_data():
-            data.load()
-        else:
-            data.import_table()
-            data.save(sync=False)
-
-    _start_chair()
-    root.protocol("WM_DELETE_WINDOW",
-                  lambda: (data.save(sync=single), root.destroy()))
+    if not data.has_data():
+        if not data.choose_file():
+            root.destroy()
+            return
+    data.load()
+    if not countries:
+        data.import_table()
+        data.save()
+    net.Server(_on_connection).listen(8080, "0.0.0.0")
+    root.protocol("WM_DELETE_WINDOW", lambda: (data.save(), root.destroy()))
+    show_address(net.all_ipv4(), _start_chair)   # hotspot IP included
     mainloop()
 
 

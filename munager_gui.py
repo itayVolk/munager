@@ -504,7 +504,7 @@ class Munager:
     def AddUpDown(self, value: Any = 0, *,
                   lo: int = 1, hi: int = 5, disabled: bool = False,
                   event: Optional[CtrlEvent] = None) -> Ctrl:
-        var = tk.StringVar(value=str(value or lo))
+        var = tk.StringVar(value=str(max(lo, min(hi, value))))
         sp = tk.Spinbox(self.body, from_=lo, to=hi, textvariable=var,
                         font=self._font(), width=5)
         if disabled:

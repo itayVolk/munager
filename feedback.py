@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from tkinter import messagebox, simpledialog
 import tkinter.font as tkfont
 from typing import Optional
 
-import munager_data as data
+from munager_proto import (Country, CountryDelta, Feedback, FullState, Hello,
+                           PresenceSync, SpeechStart, decode, encode)
 import munager_net as net
 from munager_data import countries
 from munager_gui import Ctrl, Munager, mainloop
@@ -19,64 +19,64 @@ select: Optional[Munager] = None
 
 
 def sorted_present() -> list[str]:
-    return sorted(n for n, c in countries.items() if c.stat)
+    return sorted(n for n, c in countries.items() if c.presence)
 
 
 # ---- networking -------------------------------------------------------------
 
-def write(country: str, unmod: str, mod: list[str]) -> None:
-    if ip:                              # online: stream to primary, no disk
-        if client is not None:
-            client.write(json.dumps(
-                {"country": country, "unmod": unmod, "mod": mod}))
-    else:                               # offline: write own half + git
-        data.save(sync=True)
+def push(name: str) -> None:
+    """Send this co-chair's feedback for one delegation to the primary."""
+    if client is None:
+        return
+    c = countries.get(name)
+    if c is None:
+        return
+    client.write(encode(CountryDelta(c)))
 
 
 def _on_server_data(raw: bytes) -> None:
-    """Messages from the primary (the co-chair) on the client socket."""
+    """Messages from the primary on the client socket."""
     global select
-    text = raw.decode("utf-8")
+    message = decode(raw)
 
-    if not text.startswith("{") and not text.startswith("["):
-        mod(text, ask)                 # bare name => speech happened
+    if isinstance(message, SpeechStart):
+        mod(message.country, ask)
         return
 
-    loaded = json.loads(text)
-
-    # presence/roll-call update from primary
-    if isinstance(loaded, dict) and "presence" in loaded:
-        for name, obj in loaded["presence"].items():
-            c = countries.get(name) or data.Country(name)
-            c.stat = obj.get("stat", c.stat)
-            c.type = obj.get("type", c.type)
-            countries[name] = c
-        _reopen()                     # rebuild selector with new present list
+    if isinstance(message, PresenceSync):
+        for p in message.presence:
+            c = countries.get(p.name)
+            if c is None:
+                c = Country(p.name)
+                countries[p.name] = c
+            c.presence = p.presence
+            c.power = p.power
+        _reopen()
         return
 
-    # single-country update from primary = chair's feedback -> unmod/mod
-    if isinstance(loaded, dict) and "country" in loaded:
-        c = countries.get(loaded["country"])
-        if c:
-            c.unmod = loaded.get("unmod", c.unmod)
-            c.mod = list(loaded.get("mod", c.mod))
+    if isinstance(message, CountryDelta):
+        d = message.country
+        c = countries.get(d.name)
+        if c is None:
+            c = Country(d.name)
+            countries[d.name] = c
+        # chair's feedback (its unmod/mod) lands in OUR *_feed slots
+        c.unmod_feed = d.unmod
+        c.mod_feed = list(d.mod)
+        c.presence = d.presence
+        c.power = d.power
+        _reopen()
         return
 
-    # full state map (initial sync) = chair's data -> unmod/mod
-    if select is not None:
-        select.Destroy()
-        select = None
-    countries.clear()
-    for name, obj in loaded.items():
-        c = data.Country(name)
-        c.unmod = obj.get("unmod", "")
-        c.mod = list(obj.get("mod", []))
-        c.unmod_feed = obj.get("unmod_feed", "")   # if primary sends it
-        c.mod_feed = list(obj.get("mod_feed", []))
-        c.stat = obj.get("stat", "")
-        c.type = obj.get("type", "")
-        countries[name] = c
-    primary()
+    if isinstance(message, FullState):
+        if select is not None:
+            select.Destroy()
+            select = None
+        countries.clear()
+        for c in message.countries:
+            countries[c.name] = c
+        primary()
+        return
 
 
 # ---- speech feedback (single edit) ------------------------------------------
@@ -85,7 +85,7 @@ def mod(country: str, ask_mode: int = 0) -> None:
     assert select is not None
     sel = select
 
-    if country == "":
+    if country not in countries:
         messagebox.showerror("munager", "Please select a country first")
         sel.show()
         return
@@ -99,14 +99,14 @@ def mod(country: str, ask_mode: int = 0) -> None:
     sel.Hide()
     c = countries[country]
 
-    def add_mod(entry: str) -> None:
-        c.mod_feed.append(entry)                 # co-chair's own stream
+    def add_mod(entry: Feedback) -> None:
+        c.mod.append(entry)          # co-chair's own -> unmod/mod
 
     def on_saved() -> None:
-        write(country, c.unmod_feed, c.mod_feed)
+        push(country)
         sel.show()
 
-    speech_feedback(country, lambda: c.unmod_feed, add_mod, on_saved)
+    speech_feedback(country, add_mod, on_saved)
 
 
 # ---- full feedback editor ---------------------------------------------------
@@ -115,7 +115,7 @@ def show_feedback(del_ctrl: Ctrl) -> None:
     assert select is not None
     sel = select
     name = del_ctrl.Text
-    if name == "":
+    if name not in countries:
         messagebox.showerror("munager", "Please select a country first")
         sel.show()
         return
@@ -125,10 +125,11 @@ def show_feedback(del_ctrl: Ctrl) -> None:
         view.Destroy()
         sel.show()
 
-    view = feedback_viewer(name, back, own_is_secondary=True)      # defaults: chair / co-chair
+    view = feedback_viewer(name, back)
 
 
 # ---- awards (combined own + _feed) ------------------------------------------
+
 def awards() -> None:
     assert select is not None
     sel = select
@@ -141,6 +142,31 @@ def awards() -> None:
     win = awards_window(back)
 
 
+# ---- UNMOD feedback ---------------------------------------------------------
+
+def enter_unmod(del_ctrl: Ctrl) -> None:
+    assert select is not None
+    sel = select
+    name = del_ctrl.Text
+    if name not in countries:
+        messagebox.showerror("munager", "Please select a country first")
+        return
+    sel.Hide()
+    c = countries[name]
+
+    def add_mod(entry: Feedback) -> None:
+        c.unmod = entry                     # co-chair's own unmod
+
+    def on_saved() -> None:
+        push(name)
+        sel.show()
+
+    fb = c.unmod
+    speech_feedback(name, add_mod, on_saved,
+                    score0=fb.score if fb.score >= 1 else 3,
+                    note0=fb.note)
+
+
 # ---- main selector ----------------------------------------------------------
 
 def primary() -> None:
@@ -149,55 +175,28 @@ def primary() -> None:
                      close=lambda: Munager.root().destroy())
     sel = select
 
-    sel.AddDDL(sorted_present(), width=500, sort=True)
-    sel.AddButton("Speech", event=lambda e: mod(e.Text, 2))
-    sel.AddButton("Show feedback", event=show_feedback)
+    ddl = sel.AddDDL(sorted_present(), width=500, sort=True)
+    sel.AddButton("Speech", event=lambda e: mod(ddl.Text, 2))
+    sel.AddButton("Show feedback", event=lambda e: show_feedback(ddl))
     sel.AddButton("Awards", event=lambda e: awards())
-    sel.AddButton("UNMOD feedback", event=enter_unmod)
+    sel.AddButton("UNMOD feedback", event=lambda e: enter_unmod(ddl))
 
-    if ip:
-        sel.AddText("Incoming speeches ")
-        lb = sel.AddListBox(["are ignored", "prompt you", "take control"], rows=3, choose=ask + 1)
+    sel.AddText("Incoming speeches ")
+    lb = sel.AddListBox(["are ignored", "prompt you", "take control"],
+                        rows=3, choose=ask + 1)
 
-        def on_mode(c: Ctrl) -> None:
-            global ask
-            # 1->ignore(0), 2->prompt(1), 3->control(2) mapping to AHK ask
-            v = c.Value
-            ask = {1: 0, 2: 1, 3: 2}.get(v, 1)
+    def on_mode(c: Ctrl) -> None:
+        global ask
+        ask = {1: 0, 2: 1, 3: 2}.get(c.Value, 1)
 
-        lb.widget.bind("<<ListboxSelect>>", lambda _e: on_mode(lb))
-    else:
-        sel.AddButton("Save feedback", event=lambda e: data.save(sync=False))
-        sel.AddButton("Sync (git pull/merge)", event=lambda e: (data.load(), _reopen()))
-
+    lb.widget.bind("<<ListboxSelect>>", lambda _e: on_mode(lb))
     sel.show()
-
-
-def enter_unmod(del_ctrl: Ctrl) -> None:
-    assert select is not None
-    sel = select
-    name = del_ctrl.Text
-    if name == "":
-        messagebox.showerror("munager", "Please select a country first")
-        return
-    sel.Hide()
-    c = countries[name]
-
-    def add_mod(entry: str) -> None:
-        c.unmod_feed = entry
-
-    def on_saved() -> None:
-        write(name, c.unmod_feed, c.mod_feed)
-        sel.show()
-
-    speech_feedback(name, lambda: c.unmod_feed, add_mod,
-                    on_saved, initial=c.unmod_feed)
 
 
 # ---- startup ----------------------------------------------------------------
 
 def _reopen() -> None:
-    """Rebuild the selector after the model changed (e.g. git sync)."""
+    """Rebuild the selector after the model changed."""
     global select
     if select is not None:
         select.Destroy()
@@ -216,28 +215,14 @@ def main() -> None:
         except Exception:
             pass
 
-    entered = simpledialog.askstring(
-        "munager",
-        "Server IP address? Cancel to run locally (git/file).",
-        parent=root)
+    entered = simpledialog.askstring("munager", "Server IP address?",
+                                     parent=root)
+    assert entered
 
-    if entered:                      # IP given => online
-        ip = entered
-        data.set_mode("online", primary=False)
-        client = net.connect(8080, entered)      # (port, host)
-        client.on("data", _on_server_data)
-        client.write("start")                    # request full state
-    else:                            # offline => owns secondary.csv, git-merged
-        ip = ""
-        data.set_mode("offline", primary=False)
-        if not data._dir():
-            if not data.choose_dir():     # user cancelled folder pick
-                messagebox.showinfo("munager", "No folder selected. Exiting.")
-                root.destroy()
-                return
-        else:
-            data.load()
-        primary()                         # build the selector immediately
+    ip = entered
+    client = net.connect(8080, entered)
+    client.on("data", _on_server_data)
+    client.write(encode(Hello()))            # request full state
     mainloop()
 
 

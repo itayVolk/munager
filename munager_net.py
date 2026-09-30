@@ -1,14 +1,23 @@
+from __future__ import annotations
+
 import socket
 import struct
 import threading
 import queue
+import traceback
+from typing import Callable
 
-# Cross-thread callback dispatch. The GUI installs a Tk `after` pump that
-# drains this queue on the main thread.
-_dispatch = queue.Queue()
+# A queued callback runs on the Tk main thread via pump().
+_Callback = Callable[[], None]
+# A data listener receives one complete binary message.
+DataListener = Callable[[bytes], None]
+# A connection listener receives a newly-accepted socket.
+ConnListener = Callable[["LengthSocket"], None]
+
+_dispatch: "queue.Queue[_Callback]" = queue.Queue()
 
 
-def pump():
+def pump() -> None:
     """Call from the Tk main loop to run queued socket callbacks safely."""
     while True:
         try:
@@ -17,37 +26,43 @@ def pump():
             break
         try:
             fn()
-        except Exception as e:
-            print("callback error:", e)
+        except Exception:
+            traceback.print_exc()
 
 
-def _later(fn):
+def _later(fn: _Callback) -> None:
     _dispatch.put(fn)
 
 
 class LengthSocket:
-    """Length-prefixed message socket, mirroring net.ahk Length_Socket."""
+    """Length-prefixed BINARY message socket.
 
-    def __init__(self, sock: socket.socket):
-        self.sock = sock
-        self._listeners = []
-        self._closed = False
+    Only raw ``bytes`` may be sent; encode via ``munager_proto.encode``.
+    """
+
+    def __init__(self, sock: socket.socket) -> None:
+        self.sock: socket.socket = sock
+        self._listeners: list[DataListener] = []
+        self._closed: bool = False
         t = threading.Thread(target=self._reader, daemon=True)
         t.start()
 
-    def on(self, event, listener):
+    def on(self, event: str, listener: DataListener) -> None:
         if event == "data":
             self._listeners.append(listener)
 
-    def write(self, data):
-        if isinstance(data, str):
-            data = data.encode("utf-8")
+    def write(self, data: bytes) -> None:
+        """Send one framed message. Binary only — no str accepted."""
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise TypeError(
+                "LengthSocket.write expects bytes; "
+                "encode with munager_proto.encode() first")
         try:
-            self.sock.sendall(struct.pack("<I", len(data)) + data)
+            self.sock.sendall(struct.pack("<I", len(data)) + bytes(data))
         except OSError:
             self.destroy()
 
-    def _reader(self):
+    def _reader(self) -> None:
         buf = b""
         want = 4
         state = "length"
@@ -74,7 +89,7 @@ class LengthSocket:
         finally:
             self.destroy()
 
-    def destroy(self):
+    def destroy(self) -> None:
         if self._closed:
             return
         self._closed = True
@@ -85,16 +100,16 @@ class LengthSocket:
 
 
 class Server:
-    def __init__(self, connection_listener):
-        self._cb = connection_listener
+    def __init__(self, connection_listener: ConnListener) -> None:
+        self._cb: ConnListener = connection_listener
 
-    def listen(self, port, host):
+    def listen(self, port: int, host: str) -> "Server":
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind((host, int(port)))
         srv.listen(200)
 
-        def accept_loop():
+        def accept_loop() -> None:
             while True:
                 try:
                     conn, _ = srv.accept()
@@ -107,46 +122,43 @@ class Server:
         return self
 
 
-def connect(port, host):
+def connect(port: int, host: str) -> LengthSocket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect((host, int(port)))
     return LengthSocket(sock)
 
 
-def local_ip():
+def local_ip() -> str:
     """Best-effort primary IPv4, mirroring SysGetIPAddresses()[1]."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
+        ip = str(s.getsockname()[0])
         s.close()
         return ip
     except OSError:
         return "127.0.0.1"
 
 
-def all_ipv4():
+def all_ipv4() -> list[str]:
     """All local IPv4 addresses, hotspot-range addresses first."""
-    addrs = set()
+    addrs: set[str] = set()
     try:
         host = socket.gethostname()
         for info in socket.getaddrinfo(host, None, socket.AF_INET):
             addr = info[4][0]
             if isinstance(addr, str):
                 addr = addr.strip()
-            addrs.add(addr)
+                addrs.add(addr)
     except OSError:
         pass
-    # also the default-route address (existing behaviour)
     try:
         addrs.add(local_ip())
     except Exception:
         pass
     addrs.discard("127.0.0.1")
 
-    def rank(ip):
-        # Windows Mobile Hotspot uses 192.168.137.x; generic hotspots often
-        # 192.168.x / 10.x. Prefer 137 subnet, then private ranges.
+    def rank(ip: str) -> int:
         if ip.startswith("192.168.137."):
             return 0
         if ip.startswith("192.168."):
